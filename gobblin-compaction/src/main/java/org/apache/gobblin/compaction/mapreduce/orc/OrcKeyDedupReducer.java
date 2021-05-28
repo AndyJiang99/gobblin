@@ -25,11 +25,12 @@ import java.util.TreeMap;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.io.WritableComparable;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.mapred.OrcKey;
 import org.apache.orc.mapred.OrcStruct;
 import org.apache.orc.mapred.OrcValue;
+import org.apache.gobblin.metrics.event.EventSubmitter;
+import org.apache.gobblin.metrics.event.GobblinEventBuilder;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
@@ -39,6 +40,8 @@ import com.google.common.base.Optional;
  * Check record duplicates in reducer-side.
  */
 public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcValue, NullWritable, OrcValue> {
+
+  protected EventSubmitter eventSubmitter;
   @VisibleForTesting
   public static final String ORC_DELTA_SCHEMA_PROVIDER =
       "org.apache.gobblin.compaction." + OrcKeyDedupReducer.class.getSimpleName() + ".deltaFieldsProvider";
@@ -73,9 +76,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       OrcStruct newRecord = new OrcStruct(newSchema);
       OrcUtils.upConvertOrcStruct((OrcStruct) value.value, newRecord, newSchema);
       valueHash = newRecord.hashCode();
-      System.out.println("reduce");
-      System.out.println(newRecord.getSchema());
-      System.out.println(newRecord.getFieldValue("i"));
+
       if (topicName == ""){
         topicName = String.valueOf(newRecord.getFieldValue("topic"));
       }
@@ -86,15 +87,18 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
         writeRetainedValue(value, context);
       }
       // Add uuid, logAppendTime originally, and partition to our map, both duplicates and non-duplicates
-        TreeMap<Integer, Integer> temp = new TreeMap<>();
-        temp.put(Integer.parseInt(String.valueOf(newRecord.getFieldValue("timestamp"))), Integer.parseInt(
-            String.valueOf(newRecord.getFieldValue("partition"))));
-        recordFirstView.put(valueHash, temp);
+      TreeMap<Integer, Integer> temp = new TreeMap<>();
+      temp.put(Integer.parseInt(String.valueOf(newRecord.getFieldValue("timestamp"))), Integer.parseInt(
+          String.valueOf(newRecord.getFieldValue("partition"))));
+      recordFirstView.put(valueHash, temp);
     }
 
+    // Emitting the duplicates in the TreeMap
     for (Map.Entry<Integer, TreeMap<Integer, Integer>> hashcode: recordFirstView.entrySet()){
       int initialTime = -1;
       int initialPartition = -1;
+      GobblinEventBuilder gobblinTrackingEvent =
+          new GobblinEventBuilder("Gobblin duplicate events - andjiang");
       for (Map.Entry<Integer, Integer> appendTime: hashcode.getValue().entrySet()){
         // This is to set the values for the first element by hashcode
         if (initialTime == -1 && initialPartition == -1){
@@ -102,22 +106,19 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
           initialPartition = appendTime.getValue();
         }
         else{
-          // Emit event with topic of string topicName
-          // Emit event with time of appendTime.getKey() - initialTime
-          // Emit event with logAppendTime of logAppendTime
+          gobblinTrackingEvent.addMetadata("topic", topicName);
+          gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(appendTime.getKey() - initialTime));
           if(appendTime.getValue() == initialPartition){
-            // Emit true event for partition
             System.out.print("True");
+            gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
           }
           else{
-            // Emit false event for partition
-            System.out.print("False");
+            gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
           }
-          System.out.println(appendTime.getKey() + " , " + appendTime.getValue());
+          eventSubmitter.submit(gobblinTrackingEvent);
         }
       }
     }
-    // {topicName, abs(value.logAppendTime - originalTime), check if the same between value.partition and partition of the first record, value.logAppendTime}
 
     /* At this point, keyset of valuesToRetain should contains all different OrcValue. */
     for (Map.Entry<Integer, Integer> entry : valuesToRetain.entrySet()) {
