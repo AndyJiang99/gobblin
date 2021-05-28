@@ -21,9 +21,12 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import java.util.TreeMap;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.WritableComparable;
+import org.apache.orc.TypeDescription;
 import org.apache.orc.mapred.OrcKey;
 import org.apache.orc.mapred.OrcStruct;
 import org.apache.orc.mapred.OrcValue;
@@ -58,17 +61,63 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
     /* Map from hash of value(Typed in OrcStruct) object to its times of duplication*/
     Map<Integer, Integer> valuesToRetain = new HashMap<>();
+    // new map of values of first record
+    Map<Integer, TreeMap<Integer, Integer>> recordFirstView = new HashMap<Integer, TreeMap<Integer, Integer>>();
     int valueHash = 0;
+    String topicName = "";
 
     for (OrcValue value : values) {
-      valueHash = ((OrcStruct) value.value).hashCode();
+      String originalSchema = ((OrcStruct)value.value).getSchema().toString();
+      String noMetadataSchema = originalSchema.replace(",_kafkaMetadata:struct<topic:string,partition:int,offset:bigint,timestamp:bigint,timestampType:struct<noTimestamp:boolean,createTime:boolean,logAppendTime:boolean>,cluster:string,fabric:string>","");
+      TypeDescription newSchema = TypeDescription.fromString(noMetadataSchema);
+      OrcStruct newRecord = new OrcStruct(newSchema);
+      OrcUtils.upConvertOrcStruct((OrcStruct) value.value, newRecord, newSchema);
+      valueHash = newRecord.hashCode();
+      System.out.println("reduce");
+      System.out.println(newRecord.getSchema());
+      System.out.println(newRecord.getFieldValue("i"));
+      if (topicName == ""){
+        topicName = String.valueOf(newRecord.getFieldValue("topic"));
+      }
       if (valuesToRetain.containsKey(valueHash)) {
         valuesToRetain.put(valueHash, valuesToRetain.get(valueHash) + 1);
       } else {
         valuesToRetain.put(valueHash, 1);
         writeRetainedValue(value, context);
       }
+      // Add uuid, logAppendTime originally, and partition to our map, both duplicates and non-duplicates
+        TreeMap<Integer, Integer> temp = new TreeMap<>();
+        temp.put(Integer.parseInt(String.valueOf(newRecord.getFieldValue("timestamp"))), Integer.parseInt(
+            String.valueOf(newRecord.getFieldValue("partition"))));
+        recordFirstView.put(valueHash, temp);
     }
+
+    for (Map.Entry<Integer, TreeMap<Integer, Integer>> hashcode: recordFirstView.entrySet()){
+      int initialTime = -1;
+      int initialPartition = -1;
+      for (Map.Entry<Integer, Integer> appendTime: hashcode.getValue().entrySet()){
+        // This is to set the values for the first element by hashcode
+        if (initialTime == -1 && initialPartition == -1){
+          initialTime = appendTime.getKey();
+          initialPartition = appendTime.getValue();
+        }
+        else{
+          // Emit event with topic of string topicName
+          // Emit event with time of appendTime.getKey() - initialTime
+          // Emit event with logAppendTime of logAppendTime
+          if(appendTime.getValue() == initialPartition){
+            // Emit true event for partition
+            System.out.print("True");
+          }
+          else{
+            // Emit false event for partition
+            System.out.print("False");
+          }
+          System.out.println(appendTime.getKey() + " , " + appendTime.getValue());
+        }
+      }
+    }
+    // {topicName, abs(value.logAppendTime - originalTime), check if the same between value.partition and partition of the first record, value.logAppendTime}
 
     /* At this point, keyset of valuesToRetain should contains all different OrcValue. */
     for (Map.Entry<Integer, Integer> entry : valuesToRetain.entrySet()) {
