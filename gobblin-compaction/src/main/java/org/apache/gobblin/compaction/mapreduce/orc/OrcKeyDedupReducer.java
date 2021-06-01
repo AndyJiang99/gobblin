@@ -23,6 +23,8 @@ import java.util.Map;
 
 import java.util.TreeMap;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
+import org.apache.gobblin.instrumented.Instrumented;
+import org.apache.gobblin.metrics.MetricContext;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.orc.TypeDescription;
@@ -42,6 +44,7 @@ import com.google.common.base.Optional;
 public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcValue, NullWritable, OrcValue> {
 
   protected EventSubmitter eventSubmitter;
+  protected MetricContext metricContext;
   @VisibleForTesting
   public static final String ORC_DELTA_SCHEMA_PROVIDER =
       "org.apache.gobblin.compaction." + OrcKeyDedupReducer.class.getSimpleName() + ".deltaFieldsProvider";
@@ -78,7 +81,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       valueHash = newRecord.hashCode();
 
       if (topicName == ""){
-        topicName = String.valueOf(newRecord.getFieldValue("topic"));
+        topicName = String.valueOf(newRecord.getFieldValue("_kafkaMetadata.topic"));
       }
       if (valuesToRetain.containsKey(valueHash)) {
         valuesToRetain.put(valueHash, valuesToRetain.get(valueHash) + 1);
@@ -88,10 +91,12 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       }
       // Add uuid, logAppendTime originally, and partition to our map, both duplicates and non-duplicates
       TreeMap<Integer, Integer> temp = new TreeMap<>();
-      temp.put(Integer.parseInt(String.valueOf(newRecord.getFieldValue("timestamp"))), Integer.parseInt(
-          String.valueOf(newRecord.getFieldValue("partition"))));
+      temp.put(Integer.parseInt(String.valueOf(newRecord.getFieldValue("_kafkaMetadata.timestamp"))), Integer.parseInt(
+          String.valueOf(newRecord.getFieldValue("_kafkaMetadata.partition"))));
       recordFirstView.put(valueHash, temp);
     }
+    this.metricContext = Instrumented.getMetricContext(new org.apache.gobblin.configuration.State(), this.getClass());
+    this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblinDupEvents").build();
 
     // Emitting the duplicates in the TreeMap
     for (Map.Entry<Integer, TreeMap<Integer, Integer>> hashcode: recordFirstView.entrySet()){
