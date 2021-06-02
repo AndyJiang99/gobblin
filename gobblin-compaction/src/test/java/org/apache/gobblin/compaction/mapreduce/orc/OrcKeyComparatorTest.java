@@ -46,6 +46,7 @@ public class OrcKeyComparatorTest {
     Configuration conf = new Configuration();
     String orcSchema = "struct<i:int,j:int>";
 //    String orcSchema = "struct<header:struct<memberId:int,viewerUrn:string,applicationViewerUrn:string,csUserUrn:string,time:bigint,server:string,service:string,environment:string,guid:binary,treeId:binary,requestId:int,impersonatorId:string,version:string,instance:string,appName:string,testId:string,testSegmentId:string,auditHeader:struct<time:bigint,server:string,instance:string,appName:string,messageId:binary,auditVersion:int,fabricUrn:string,clusterConnectionString:string>,pageInstance:struct<pageUrn:string,trackingId:binary>,clientApplicationInstance:struct<applicationUrn:string,version:string,trackingId:binary>,originSource:string,sessionUrn:string,traceData:struct<treeId:binary,requestId:int,taskId:int,rpcTrace:string,forceTraceEnabled:boolean,context:map<string,string>,scaleFactor:double>,clientMonitoringInstanceId:binary,clientMonitoringInstanceEventNumber:bigint>,requestHeader:struct<browserId:string,sessionId:string,ip:string,pageKey:string,path:string,locale:string,interfaceLocale:string,trackingCode:string,referer:string,userAgent:string,ipAsBytes:binary,requestProtocol:string,requestDomain:string>,mobileHeader:struct<osName:string,osVersion:string,deviceModel:string,appVersion:string,advertiserId:string,vendorId:string,isAdTrackingLimited:boolean,appMarketingVersion:string,appVendorVersion:string,appVendorVersionShort:string,appState:string,connectionType:string>,pageType:string,errorMessageKey:string,trackingCode:string,trackingInfo:map<string,string>,totalTime:int,_kafkaMetadata:struct<topic:string,partition:int,offset:bigint,timestamp:bigint,timestampType:struct<noTimestamp:boolean,createTime:boolean,logAppendTime:boolean>,cluster:string,fabric:string>>";
+//    String orcSchema = "struct<_kafkaMetadata:struct<topic:string,partition:int,offset:bigint,timestamp:bigint,cluster:string,fabric:string>>";
     TypeDescription schema = TypeDescription.fromString(orcSchema);
 //    System.out.println(schema);
 //    System.out.println(schema.getFieldNames());
@@ -61,6 +62,16 @@ public class OrcKeyComparatorTest {
     conf.set(OrcConf.MAPRED_SHUFFLE_KEY_SCHEMA.getAttribute(), orcSchema);
     Assert.assertEquals(conf.get(OrcConf.MAPRED_SHUFFLE_KEY_SCHEMA.getAttribute()), orcSchema);
     comparator.setConf(conf);
+
+//    OrcStruct record0 = (OrcStruct) OrcStruct.createValue(TypeDescription.fromString(orcSchema));
+//    System.out.println(record0.getFieldValue("_kafkaMetadata"));
+//    System.out.println(((OrcStruct)record0.getFieldValue("_kafkaMetadata")).getFieldValue("partition"));
+//    record0.setFieldValue("topic", new Text("PageViewEvent"));
+//    record0.setFieldValue("partition", new IntWritable(2129));
+//    record0.setFieldValue("offset", new IntWritable(229));
+//    record0.setFieldValue("cluster", new Text("cluster1"));
+//    record0.setFieldValue("fabric", new Text("fabric1"));
+//    record0.setFieldValue("timestamp", new IntWritable(12345));
 
     OrcStruct record0 = createSimpleOrcStruct(schema, 1, 2);
     OrcStruct record1 = createSimpleOrcStruct(schema, 3, 4);

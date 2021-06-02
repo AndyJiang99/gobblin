@@ -20,6 +20,8 @@ package org.apache.gobblin.compaction.mapreduce.orc;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.math.BigInteger;
+import java.math.*;
 
 import java.util.TreeMap;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
@@ -68,7 +70,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
     /* Map from hash of value(Typed in OrcStruct) object to its times of duplication*/
     Map<Integer, Integer> valuesToRetain = new HashMap<>();
     // new map of values of first record
-    Map<Integer, TreeMap<Integer, Integer>> recordFirstView = new HashMap<Integer, TreeMap<Integer, Integer>>();
+    Map<Integer, TreeMap<BigInteger, Integer>> recordFirstView = new HashMap<Integer, TreeMap<BigInteger, Integer>>();
     int valueHash = 0;
     String topicName = "";
 
@@ -81,7 +83,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       valueHash = newRecord.hashCode();
 
       if (topicName == ""){
-        topicName = String.valueOf(newRecord.getFieldValue("_kafkaMetadata.topic"));
+        topicName = String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("topic"));
       }
       if (valuesToRetain.containsKey(valueHash)) {
         valuesToRetain.put(valueHash, valuesToRetain.get(valueHash) + 1);
@@ -90,31 +92,33 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
         writeRetainedValue(value, context);
       }
       // Add uuid, logAppendTime originally, and partition to our map, both duplicates and non-duplicates
-      TreeMap<Integer, Integer> temp = new TreeMap<>();
-      temp.put(Integer.parseInt(String.valueOf(newRecord.getFieldValue("_kafkaMetadata.timestamp"))), Integer.parseInt(
-          String.valueOf(newRecord.getFieldValue("_kafkaMetadata.partition"))));
+      TreeMap<BigInteger, Integer> temp = new TreeMap<>();
+      BigInteger timestamp = BigInteger.valueOf(Long.parseLong(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("timestamp"))));
+      int partition = Integer.parseInt(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("partition")));
+      temp.put(timestamp, partition);
       recordFirstView.put(valueHash, temp);
     }
     this.metricContext = Instrumented.getMetricContext(new org.apache.gobblin.configuration.State(), this.getClass());
     this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblinDupEvents").build();
 
     // Emitting the duplicates in the TreeMap
-    for (Map.Entry<Integer, TreeMap<Integer, Integer>> hashcode: recordFirstView.entrySet()){
-      int initialTime = -1;
+    for (Map.Entry<Integer, TreeMap<BigInteger, Integer>> hashcode: recordFirstView.entrySet()){
+      BigInteger initialTime = BigInteger.valueOf(-1);
       int initialPartition = -1;
       GobblinEventBuilder gobblinTrackingEvent =
           new GobblinEventBuilder("Gobblin duplicate events - andjiang");
-      for (Map.Entry<Integer, Integer> appendTime: hashcode.getValue().entrySet()){
+      for (Map.Entry<BigInteger, Integer> appendTime: hashcode.getValue().entrySet()){
         // This is to set the values for the first element by hashcode
-        if (initialTime == -1 && initialPartition == -1){
+        if (initialTime == BigInteger.valueOf(-1) && initialPartition == -1){
           initialTime = appendTime.getKey();
           initialPartition = appendTime.getValue();
         }
         else{
           gobblinTrackingEvent.addMetadata("topic", topicName);
-          gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(appendTime.getKey() - initialTime));
+          BigInteger newTime = appendTime.getKey();
+          BigInteger timeDiff = newTime.subtract(initialTime);
+          gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
           if(appendTime.getValue() == initialPartition){
-            System.out.print("True");
             gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
           }
           else{
