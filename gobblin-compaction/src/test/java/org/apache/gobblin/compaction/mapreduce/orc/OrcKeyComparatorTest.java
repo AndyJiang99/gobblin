@@ -18,6 +18,8 @@
 package org.apache.gobblin.compaction.mapreduce.orc;
 
 import java.util.TreeMap;
+import java.util.*;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
@@ -58,6 +60,30 @@ public class OrcKeyComparatorTest {
 //    TypeDescription newSchema = TypeDescription.fromString(noMetadata);
 //    System.out.println(newSchema.getFieldNames());
 //    System.out.println(newSchema.getChildren());
+//
+//    System.out.println("New method");
+//    List<TypeDescription> newList = new ArrayList<TypeDescription>(schema.getChildren());
+//    System.out.println(newList);
+//
+//    System.out.println("Creating new struct");
+//    TypeDescription kafka = TypeDescription.createStruct();
+//    TypeDescription metadataSchema = TypeDescription.fromString("struct<topic:string,partition:int,offset:bigint,timestamp:bigint,timestampType:struct<noTimestamp:boolean,createTime:boolean,logAppendTime:boolean>,cluster:string,fabric:string>");
+//    System.out.println(metadataSchema);
+//    newList.remove(metadataSchema);
+//    System.out.println(newList);
+//
+//    System.out.println("Reconstruction");
+//    TypeDescription newSchema1 = TypeDescription.createStruct();
+//    System.out.println(newList.size());
+//    for (int i = 0; i < newList.size() - 1; i++){
+//      System.out.println(newList.get(i));
+//      newSchema1.addChild(newList.get(i));
+//    }
+//    System.out.println(newSchema1);
+//    System.out.println(newSchema1.getChildren());
+//    System.out.println("Works");
+//
+//
 //    Assert.assertTrue(false);
     conf.set(OrcConf.MAPRED_SHUFFLE_KEY_SCHEMA.getAttribute(), orcSchema);
     Assert.assertEquals(conf.get(OrcConf.MAPRED_SHUFFLE_KEY_SCHEMA.getAttribute()), orcSchema);

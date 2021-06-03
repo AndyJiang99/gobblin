@@ -52,6 +52,11 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       "org.apache.gobblin.compaction." + OrcKeyDedupReducer.class.getSimpleName() + ".deltaFieldsProvider";
   public static final String USING_WHOLE_RECORD_FOR_COMPARE = "usingWholeRecordForCompareInReducer";
 
+  public OrcKeyDedupReducer(){
+    this.metricContext = Instrumented.getMetricContext(new org.apache.gobblin.configuration.State(), this.getClass());
+    this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblinDupEvents").build();
+  }
+
   @Override
   protected void setOutValue(OrcValue valueToRetain) {
     // Better to copy instead reassigning reference.
@@ -95,18 +100,18 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       TreeMap<BigInteger, Integer> temp = new TreeMap<>();
       BigInteger timestamp = BigInteger.valueOf(Long.parseLong(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("timestamp"))));
       int partition = Integer.parseInt(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("partition")));
+      if (recordFirstView.containsKey(valueHash)){
+        temp = recordFirstView.get(valueHash);
+      }
       temp.put(timestamp, partition);
       recordFirstView.put(valueHash, temp);
     }
-    this.metricContext = Instrumented.getMetricContext(new org.apache.gobblin.configuration.State(), this.getClass());
-    this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblinDupEvents").build();
 
     // Emitting the duplicates in the TreeMap
     for (Map.Entry<Integer, TreeMap<BigInteger, Integer>> hashcode: recordFirstView.entrySet()){
       BigInteger initialTime = BigInteger.valueOf(-1);
       int initialPartition = -1;
-      GobblinEventBuilder gobblinTrackingEvent =
-          new GobblinEventBuilder("Gobblin duplicate events - andjiang");
+      GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
       for (Map.Entry<BigInteger, Integer> appendTime: hashcode.getValue().entrySet()){
         // This is to set the values for the first element by hashcode
         if (initialTime == BigInteger.valueOf(-1) && initialPartition == -1){
