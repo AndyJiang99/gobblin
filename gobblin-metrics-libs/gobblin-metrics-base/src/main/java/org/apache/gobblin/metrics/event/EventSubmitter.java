@@ -23,6 +23,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.metrics.GobblinTrackingEvent;
 import org.apache.gobblin.metrics.MetricContext;
 
@@ -37,6 +38,7 @@ import lombok.Getter;
  * </p>
  *
  */
+@Slf4j
 public class EventSubmitter {
 
   public static final String EVENT_TYPE = "eventType";
@@ -84,6 +86,9 @@ public class EventSubmitter {
    */
   public void submit(GobblinEventBuilder eventBuilder) {
     eventBuilder.addAdditionalMetadata(this.metadata);
+    log.info("EVENTSUBMITTER SUBMIT");
+    log.info("NAMESPACE");
+    log.info(eventBuilder.namespace);
     if(eventBuilder.namespace == null) {
       eventBuilder.setNamespace(this.namespace);
     }

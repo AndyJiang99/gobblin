@@ -39,10 +39,12 @@ import org.apache.gobblin.metrics.event.GobblinEventBuilder;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Check record duplicates in reducer-side.
  */
+@Slf4j
 public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcValue, NullWritable, OrcValue> {
 
   protected EventSubmitter eventSubmitter;
@@ -55,6 +57,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
   public OrcKeyDedupReducer(){
     this.metricContext = Instrumented.getMetricContext(new org.apache.gobblin.configuration.State(), this.getClass());
     this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblinDupEvents").build();
+    log.info("Constructed metricContext and eventSubmitter");
   }
 
   @Override
@@ -87,7 +90,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       OrcUtils.upConvertOrcStruct((OrcStruct) value.value, newRecord, newSchema);
       valueHash = newRecord.hashCode();
 
-      if (topicName == ""){
+      if (topicName.equals("")){
         topicName = String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("topic"));
       }
       if (valuesToRetain.containsKey(valueHash)) {
@@ -107,11 +110,15 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       recordFirstView.put(valueHash, temp);
     }
 
+    log.info("Finished reducing. About to emit duplicate events");
+
     // Emitting the duplicates in the TreeMap
     for (Map.Entry<Integer, TreeMap<BigInteger, Integer>> hashcode: recordFirstView.entrySet()){
       BigInteger initialTime = BigInteger.valueOf(-1);
       int initialPartition = -1;
       GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
+      log.info("Instantiated Gobblin Tracking Event");
+      log.info(gobblinTrackingEvent.toString());
       for (Map.Entry<BigInteger, Integer> appendTime: hashcode.getValue().entrySet()){
         // This is to set the values for the first element by hashcode
         if (initialTime == BigInteger.valueOf(-1) && initialPartition == -1){
@@ -129,7 +136,11 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
           else{
             gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
           }
+          log.info("Attempting to submit event");
+          log.info("Gobblin Tracking Event");
+          log.info(gobblinTrackingEvent.toString());
           eventSubmitter.submit(gobblinTrackingEvent);
+          log.info("Finished submitting event");
         }
       }
     }
