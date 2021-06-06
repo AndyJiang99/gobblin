@@ -91,10 +91,15 @@ public class EventSubmitter {
     log.info(eventBuilder.namespace);
     if(eventBuilder.namespace == null) {
       eventBuilder.setNamespace(this.namespace);
+      log.info(this.namespace);
+      log.info(eventBuilder.toString());
     }
+    log.info("METRIC CONTEXT");
+    log.info(String.valueOf(metricContext.isPresent()));
     if (metricContext.isPresent()) {
       this.metricContext.get().submitEvent(eventBuilder.build());
     }
+    log.info(this.metricContext.toString());
   }
 
   /**
