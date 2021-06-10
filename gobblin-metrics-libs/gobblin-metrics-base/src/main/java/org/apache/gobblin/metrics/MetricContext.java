@@ -17,7 +17,6 @@
 
 package org.apache.gobblin.metrics;
 
-import lombok.extern.slf4j.Slf4j;
 import lombok.Getter;
 
 import java.io.Closeable;
@@ -83,7 +82,6 @@ import org.apache.gobblin.util.ExecutorsUtils;
  *
  * @author Yinan Li
  */
-@Slf4j
 public class MetricContext extends MetricRegistry implements ReportableContext, Closeable {
 
   protected final Closer closer;
@@ -617,6 +615,7 @@ public class MetricContext extends MetricRegistry implements ReportableContext, 
           }
         }
     }
+
     if(getParent().isPresent()) {
       getParent().get().sendNotification(notification);
     }
