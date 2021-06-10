@@ -174,7 +174,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
           gobblinTrackingEvent.addMetadata("timeCurrentRecord", String.valueOf(newTime));
           gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
           gobblinTrackingEvent.addMetadata("partitionFirstRecord", String.valueOf(initialPartition));
-          gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(appendTime.getValue()));
+          gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(kafkaInformation.getKey()));
           gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
           gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(kafkaInformation.getValue()));
           eventSubmitter.submit(gobblinTrackingEvent);
