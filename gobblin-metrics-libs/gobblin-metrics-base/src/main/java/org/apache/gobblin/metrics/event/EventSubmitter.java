@@ -23,7 +23,6 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.metrics.GobblinTrackingEvent;
 import org.apache.gobblin.metrics.MetricContext;
 
@@ -38,7 +37,6 @@ import lombok.Getter;
  * </p>
  *
  */
-@Slf4j
 public class EventSubmitter {
 
   public static final String EVENT_TYPE = "eventType";
@@ -89,11 +87,9 @@ public class EventSubmitter {
     if(eventBuilder.namespace == null) {
       eventBuilder.setNamespace(this.namespace);
     }
-    log.info("Namespace of: " + this.namespace + " and Metric context is: " + metricContext.isPresent());
     if (metricContext.isPresent()) {
       this.metricContext.get().submitEvent(eventBuilder.build());
     }
-    log.info("Reached end of submit");
   }
 
   /**

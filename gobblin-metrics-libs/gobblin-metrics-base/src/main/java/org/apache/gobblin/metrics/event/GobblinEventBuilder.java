@@ -25,7 +25,6 @@ import com.google.common.collect.Maps;
 import lombok.Getter;
 import lombok.Setter;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.metrics.GobblinTrackingEvent;
 import org.apache.gobblin.metrics.MetricContext;
 
@@ -38,7 +37,6 @@ import org.apache.gobblin.metrics.MetricContext;
  *
  * Note: a {@link GobblinEventBuilder} instance is not reusable
  */
-@Slf4j
 public class GobblinEventBuilder {
   public static final String NAMESPACE = "gobblin.event";
   public static final String EVENT_TYPE = "eventType";
@@ -82,7 +80,6 @@ public class GobblinEventBuilder {
    * Build as {@link GobblinTrackingEvent}
    */
   public GobblinTrackingEvent build() {
-    log.info("Building GTE: " + namespace + " " + name + " " + metadata);
     return new GobblinTrackingEvent(0L, namespace, name, metadata);
   }
   /**

@@ -212,7 +212,6 @@ public class MetricContext extends MetricRegistry implements ReportableContext, 
     injectTagsToEvent(nonReusableEvent);
 
     EventNotification notification = new EventNotification(nonReusableEvent);
-    log.info("In Metric Context, Notification: " + notification + " Event: " + notification.getEvent());
     sendNotification(notification);
   }
 
@@ -609,18 +608,15 @@ public class MetricContext extends MetricRegistry implements ReportableContext, 
   public void sendNotification(final Notification notification) {
 
     ContextAwareTimer.Context timer = this.notificationTimer.time();
-    log.info("In sendNotification, notificationTargets: " + this.notificationTargets);
     if(!this.notificationTargets.isEmpty()) {
         for (final Map.Entry<UUID, Function<Notification, Void>> entry : this.notificationTargets.entrySet()) {
           try {
             entry.getValue().apply(notification);
-            log.info("Successfully emitted " + notification);
           } catch (RuntimeException exception) {
             LOG.warn("RuntimeException when running notification target. Skipping.", exception);
           }
         }
     }
-    log.info("getParent is " + getParent() + " and is " + getParent().isPresent());
     if(getParent().isPresent()) {
       getParent().get().sendNotification(notification);
     }
