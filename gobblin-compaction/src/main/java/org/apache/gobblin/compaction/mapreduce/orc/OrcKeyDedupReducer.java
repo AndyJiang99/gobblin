@@ -136,7 +136,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
         temp = recordFirstView.get(valueHash);
       }
       if (temp.containsKey(timestamp)){
-        kafkaInfo.get(timestamp);
+        kafkaInfo = temp.get(timestamp);
       }
 
       kafkaInfo.put(partition, offset);
