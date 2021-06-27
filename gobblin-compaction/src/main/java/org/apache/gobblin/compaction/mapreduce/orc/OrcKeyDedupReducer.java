@@ -26,6 +26,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
 import org.apache.gobblin.configuration.DynamicConfigGenerator;
@@ -51,9 +52,11 @@ import com.google.common.base.Optional;
 /**
  * Check record duplicates in reducer-side.
  */
+@Slf4j
 public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcValue, NullWritable, OrcValue> {
 
   protected EventSubmitter eventSubmitter;
+  protected EventSubmitter eventSubmitterCountTotal;
   protected MetricContext metricContext;
   @VisibleForTesting
   public static final String ORC_DELTA_SCHEMA_PROVIDER =
@@ -80,6 +83,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
     }
     this.metricContext = gobblinMetrics.getMetricContext().childBuilder("reducer").build();
     this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblin.DuplicateEvents").build();
+    this.eventSubmitterCountTotal = new EventSubmitter.Builder(this.metricContext, "gobblin.CountTotal").build();
   }
 
   @Override
@@ -102,6 +106,9 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
     Map<Integer, TreeMap<BigInteger, Map<Integer, BigInteger>>> recordFirstView = new HashMap<>();
     int valueHash = 0;
     String topicName = "";
+    long countDuplicates = 0;
+    long countTotal = 0;
+    long countRecordsInMap = 0;
 
     for (OrcValue value : values) {
       String originalSchema = ((OrcStruct)value.value).getSchema().toString();
@@ -110,6 +117,8 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       OrcStruct newRecord = new OrcStruct(newSchema);
       OrcUtils.upConvertOrcStruct((OrcStruct) value.value, newRecord, newSchema);
       valueHash = newRecord.hashCode();
+      countTotal += 1;
+
       if (topicName.equals("")){
         topicName = String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("topic"));
       }
@@ -143,12 +152,14 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       temp.put(timestamp, kafkaInfo);
       recordFirstView.put(valueHash, temp);
     }
+    log.info(String.valueOf(recordFirstView));
     // Emitting the duplicates in the TreeMap
     for (Map.Entry<Integer, TreeMap<BigInteger, Map<Integer, BigInteger>>> hashcode: recordFirstView.entrySet()){
       BigInteger initialTime = BigInteger.valueOf(-1);
       int initialPartition = -1;
       BigInteger initialOffset = BigInteger.valueOf(-1);
       GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
+      countRecordsInMap += 1;
 
       for (Map.Entry<BigInteger, Map<Integer, BigInteger>> appendTime: hashcode.getValue().entrySet()){
         Set<Map.Entry<Integer, BigInteger>> kafkaInformationSet = appendTime.getValue().entrySet();
@@ -160,6 +171,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
           initialOffset = kafkaInformation.getValue();
         }
         else{
+          countDuplicates += 1;
           BigInteger newTime = appendTime.getKey();
           BigInteger timeDiff = newTime.subtract(initialTime);
 
@@ -181,6 +193,14 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
         }
       }
     }
+    log.info("Total number of duplicate events emitted: " + countDuplicates);
+    log.info("Total number of records in original dataset: " + countTotal);
+    log.info("Total number of records in map: " + countRecordsInMap);
+
+    GobblinEventBuilder countTotalEvents = new GobblinEventBuilder("Gobblin count events - andjiang");
+    countTotalEvents.addMetadata("topic", topicName);
+    countTotalEvents.addMetadata("totalRecordsCount", String.valueOf(countTotal));
+    eventSubmitterCountTotal.submit(countTotalEvents);
 
     /* At this point, keyset of valuesToRetain should contains all different OrcValue. */
     for (Map.Entry<Integer, Integer> entry : valuesToRetain.entrySet()) {
