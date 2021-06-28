@@ -26,6 +26,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 
+import javax.ws.rs.core.MultivaluedMap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
@@ -48,15 +49,13 @@ import org.apache.gobblin.metrics.event.GobblinEventBuilder;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 
-
+@Slf4j
 /**
  * Check record duplicates in reducer-side.
  */
-@Slf4j
 public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcValue, NullWritable, OrcValue> {
 
   protected EventSubmitter eventSubmitter;
-  protected EventSubmitter eventSubmitterCountTotal;
   protected MetricContext metricContext;
   @VisibleForTesting
   public static final String ORC_DELTA_SCHEMA_PROVIDER =
@@ -77,13 +76,12 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
     GobblinMetrics gobblinMetrics = GobblinMetrics.get(context.getTaskAttemptID().toString());
     try{
-        gobblinMetrics.startMetricReportingWithFileSuffix(state, context.getTaskAttemptID().toString());
+      gobblinMetrics.startMetricReportingWithFileSuffix(state, context.getTaskAttemptID().toString());
     } catch (MultiReporterException e) {
       e.printStackTrace();
     }
     this.metricContext = gobblinMetrics.getMetricContext().childBuilder("reducer").build();
     this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblin.DuplicateEvents").build();
-    this.eventSubmitterCountTotal = new EventSubmitter.Builder(this.metricContext, "gobblin.CountTotal").build();
   }
 
   @Override
@@ -101,15 +99,11 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
   protected void reduce(OrcKey key, Iterable<OrcValue> values, Context context)
       throws IOException, InterruptedException {
     /* Map from hash of value(Typed in OrcStruct) object to its times of duplication*/
-//    log.info("IN REDUCER FUNCTION");
     Map<Integer, Integer> valuesToRetain = new HashMap<>();
     // New map of values of first record
-    Map<Integer, TreeMap<BigInteger, Map<Integer, BigInteger>>> recordFirstView = new HashMap<>();
+    Map<Integer, TreeMap<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>>> recordFirstView = new HashMap<>();
     int valueHash = 0;
     String topicName = "";
-//    long countDuplicates = 0;
-//    long countTotal = 0;
-//    long countRecordsInMap = 0;
 
     for (OrcValue value : values) {
       String originalSchema = ((OrcStruct)value.value).getSchema().toString();
@@ -118,8 +112,6 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       OrcStruct newRecord = new OrcStruct(newSchema);
       OrcUtils.upConvertOrcStruct((OrcStruct) value.value, newRecord, newSchema);
       valueHash = newRecord.hashCode();
-//      countTotal += 1;
-
       if (topicName.equals("")){
         topicName = String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("topic"));
       }
@@ -133,79 +125,108 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
       /**
        * Add hashcode, logAppendTime, offset, and partition to our map, both duplicates and non-duplicates
-       * Map structure: {hashcode, {logAppendTime, {offset, partition}}}
+       * Map structure: {hashcode, {logAppendTime, {partition, {offset, numTimesSeen}}}
        */
 
-      TreeMap<BigInteger, Map<Integer, BigInteger>> temp = new TreeMap<>();
-      Map<Integer, BigInteger> kafkaInfo = new HashMap<>();
+      TreeMap<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>> temp = new TreeMap<>();
+      Map<Integer, Map<BigInteger, BigInteger>> kafkaInfo = new HashMap<>();
+      Map<BigInteger, BigInteger> occurrence = new HashMap<>();
+
       BigInteger timestamp = BigInteger.valueOf(Long.parseLong(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("timestamp"))));
       int partition = Integer.parseInt(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("partition")));
       BigInteger offset = BigInteger.valueOf(Long.parseLong(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("offset"))));
 
+      BigInteger timesSeen = BigInteger.valueOf(1);
+      boolean prevSeen = false;
+
+      // If the hashcode already exists
       if (recordFirstView.containsKey(valueHash)){
         temp = recordFirstView.get(valueHash);
       }
+      // If the logAppendTime already exists
       if (temp.containsKey(timestamp)){
         kafkaInfo = temp.get(timestamp);
       }
-
-      kafkaInfo.put(partition, offset);
+      // If the partition already exists
+      if (kafkaInfo.containsKey(partition)){
+        occurrence = kafkaInfo.get(partition);
+      }
+      /** If the offset already exists, then we know we have seen a record that's exactly as one previously.
+       *  Increment number of times we've seen this record
+       */
+      if (occurrence.containsKey(offset)){
+        timesSeen = occurrence.get(offset).add(BigInteger.valueOf(1));
+        occurrence.replace(offset, timesSeen);
+        prevSeen = true;
+      }
+      // Fallback case in case this record wasn't seen previously at all. Insert default value into map
+      if (prevSeen == false){
+        occurrence.put(offset, timesSeen);
+      }
+      kafkaInfo.put(partition, occurrence);
       temp.put(timestamp, kafkaInfo);
       recordFirstView.put(valueHash, temp);
     }
-//    log.info(String.valueOf(recordFirstView));
+
+    emitEvents(topicName, recordFirstView, context);
+
+    /* At this point, keyset of valuesToRetain should contains all different OrcValue. */
+    for (Map.Entry<Integer, Integer> entry : valuesToRetain.entrySet()) {
+      updateCounters(entry.getValue(), -1, context);
+    }
+  }
+
+  private void emitEvents(String topicName, Map<Integer, TreeMap<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>>> recordFirstView, Context context){
     // Emitting the duplicates in the TreeMap
-    for (Map.Entry<Integer, TreeMap<BigInteger, Map<Integer, BigInteger>>> hashcode: recordFirstView.entrySet()){
+    // Go through all of the hashcodes
+    for (Map.Entry<Integer, TreeMap<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>>> hashcode: recordFirstView.entrySet()){
       BigInteger initialTime = BigInteger.valueOf(-1);
       int initialPartition = -1;
       BigInteger initialOffset = BigInteger.valueOf(-1);
       GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
-//      countRecordsInMap += 1;
 
-      for (Map.Entry<BigInteger, Map<Integer, BigInteger>> appendTime: hashcode.getValue().entrySet()){
-        Set<Map.Entry<Integer, BigInteger>> kafkaInformationSet = appendTime.getValue().entrySet();
-        Map.Entry<Integer, BigInteger> kafkaInformation = kafkaInformationSet.iterator().next();
+      // Go through all the logAppendTimes for the same hashcode
+      for (Map.Entry<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>> appendTime: hashcode.getValue().entrySet()){
+        Set<Map.Entry<Integer, Map<BigInteger, BigInteger>>> kafkaInformationSet = appendTime.getValue().entrySet();
+        Map.Entry<Integer, Map<BigInteger, BigInteger>> kafkaInformation = kafkaInformationSet.iterator().next();
+        Set<Map.Entry<BigInteger, BigInteger>> numOccurrences = kafkaInformation.getValue().entrySet();
+
         // Set the values for the first element by hashcode
-        if (initialTime.equals(BigInteger.valueOf(-1)) && initialPartition == -1){
+        if (initialTime.equals(BigInteger.valueOf(-1)) && initialPartition == -1 && initialOffset.equals(BigInteger.valueOf(-1))){
           initialTime = appendTime.getKey();
           initialPartition = kafkaInformation.getKey();
-          initialOffset = kafkaInformation.getValue();
+          initialOffset = numOccurrences.iterator().next().getKey();
         }
         else{
           BigInteger newTime = appendTime.getKey();
           BigInteger timeDiff = newTime.subtract(initialTime);
 
-          if(kafkaInformation.getKey() == initialPartition){
-            gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
+          // Go through all the partitions with the same hashcode and logAppendTime
+          for (Map.Entry<Integer, Map<BigInteger, BigInteger>> infoFromKafka: appendTime.getValue().entrySet()){
+            // Go through all the offsets with the same hashcode and logAppendTime and partition
+            for (Map.Entry<BigInteger, BigInteger> iterateOccurrences: infoFromKafka.getValue().entrySet()){
+              if (infoFromKafka.getKey() == initialPartition){
+                gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
+              }
+              else{
+                gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
+              }
+              gobblinTrackingEvent.addMetadata("topic", topicName);
+              gobblinTrackingEvent.addMetadata("timeFirstRecord", String.valueOf(initialTime));
+              gobblinTrackingEvent.addMetadata("timeCurrentRecord", String.valueOf(newTime));
+              gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
+              gobblinTrackingEvent.addMetadata("partitionFirstRecord", String.valueOf(initialPartition));
+              gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(infoFromKafka.getKey()));
+              gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
+              gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(iterateOccurrences.getKey()));
+              gobblinTrackingEvent.addMetadata("occurrences", String.valueOf(iterateOccurrences.getValue()));
+              eventSubmitter.submit(gobblinTrackingEvent);
+              log.info("Logging event: " + gobblinTrackingEvent);
+              updateCounters(-1, 1, context);
+            }
           }
-          else{
-            gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
-          }
-          gobblinTrackingEvent.addMetadata("topic", topicName);
-          gobblinTrackingEvent.addMetadata("timeFirstRecord", String.valueOf(initialTime));
-          gobblinTrackingEvent.addMetadata("timeCurrentRecord", String.valueOf(newTime));
-          gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
-          gobblinTrackingEvent.addMetadata("partitionFirstRecord", String.valueOf(initialPartition));
-          gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(kafkaInformation.getKey()));
-          gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
-          gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(kafkaInformation.getValue()));
-          eventSubmitter.submit(gobblinTrackingEvent);
-//          countDuplicates += 1;
         }
       }
-    }
-//    log.info("Total number of duplicate events successfully emitted: " + countDuplicates);
-//    log.info("Total number of records in original dataset: " + countTotal);
-//    log.info("Total number of records stored into map: " + countRecordsInMap);
-
-//    GobblinEventBuilder countTotalEvents = new GobblinEventBuilder("Gobblin count events - andjiang");
-//    countTotalEvents.addMetadata("topic", topicName);
-//    countTotalEvents.addMetadata("totalRecordsCount", String.valueOf(countTotal));
-//    eventSubmitterCountTotal.submit(countTotalEvents);
-
-    /* At this point, keyset of valuesToRetain should contains all different OrcValue. */
-    for (Map.Entry<Integer, Integer> entry : valuesToRetain.entrySet()) {
-      updateCounters(entry.getValue(), context);
     }
   }
 
@@ -220,3 +241,4 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
     outValue = new OrcValue();
   }
 }
+
