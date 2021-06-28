@@ -26,7 +26,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 
-import javax.ws.rs.core.MultivaluedMap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
