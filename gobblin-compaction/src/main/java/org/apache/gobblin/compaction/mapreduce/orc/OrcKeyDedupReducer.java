@@ -23,8 +23,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.math.BigInteger;
 import java.util.Properties;
-import java.util.Set;
 import java.util.TreeMap;
+import java.util.ArrayList;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.State;
@@ -186,15 +186,11 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
       // Go through all the logAppendTimes for the same hashcode
       for (Map.Entry<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>> appendTime: hashcode.getValue().entrySet()){
-        Set<Map.Entry<Integer, Map<BigInteger, BigInteger>>> kafkaInformationSet = appendTime.getValue().entrySet();
-        Map.Entry<Integer, Map<BigInteger, BigInteger>> kafkaInformation = kafkaInformationSet.iterator().next();
-        Set<Map.Entry<BigInteger, BigInteger>> numOccurrences = kafkaInformation.getValue().entrySet();
-
         // Set the values for the first element by hashcode
         if (initialTime.equals(BigInteger.valueOf(-1)) && initialPartition == -1 && initialOffset.equals(BigInteger.valueOf(-1))){
           initialTime = appendTime.getKey();
-          initialPartition = kafkaInformation.getKey();
-          initialOffset = numOccurrences.iterator().next().getKey();
+          initialPartition = hashcode.getValue().firstEntry().getValue().entrySet().stream().findFirst().get().getKey();
+          initialOffset = hashcode.getValue().firstEntry().getValue().entrySet().stream().findFirst().get().getValue().entrySet().stream().findFirst().get().getKey();
         }
         else{
           BigInteger newTime = appendTime.getKey();
