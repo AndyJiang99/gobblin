@@ -118,6 +118,8 @@ public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<
   }
 
   protected void updateGTECounters(int emittedDuplicates, Context context){
-    context.getCounter(EVENT_COUNTER.GTE_EMITTED_EVENT).increment(emittedDuplicates);
+    if (emittedDuplicates > 0) {
+      context.getCounter(EVENT_COUNTER.GTE_EMITTED_EVENT).increment(1);
+    }
   }
 }

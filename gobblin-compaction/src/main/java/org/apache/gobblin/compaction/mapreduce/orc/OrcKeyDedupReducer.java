@@ -181,6 +181,11 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
             BigInteger newTime = appendTime.getKey();
             BigInteger timeDiff = newTime.subtract(initialTime);
 
+            if (topicName.equals("LixTreatmentsEvent") &&
+                timeDiff.divide(BigInteger.valueOf(1000)).divide(BigInteger.valueOf(60)).compareTo(BigInteger.valueOf(15)) == 1){
+              break;
+            }
+
             if (appendTime.getValue().get(i).partition == initialPartition){
               gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
             }
