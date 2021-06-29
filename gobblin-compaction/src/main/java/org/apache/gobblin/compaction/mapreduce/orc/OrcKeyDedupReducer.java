@@ -158,7 +158,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
     /* At this point, keyset of valuesToRetain should contains all different OrcValue. */
     for (Map.Entry<Integer, Integer> entry : valuesToRetain.entrySet()) {
-      updateCounters(entry.getValue(), -1, context);
+      updateCounters(entry.getValue(), context);
     }
   }
 
@@ -198,7 +198,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
             gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(appendTime.getValue().get(i).offset));
             eventSubmitter.submit(gobblinTrackingEvent);
             log.info("Logging event: " + gobblinTrackingEvent);
-            updateCounters(-1, 1, context);
+            updateGTECounters(1, context);
           }
         }
       }
