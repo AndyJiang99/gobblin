@@ -173,7 +173,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
       int currentPartition = -1;
       BigInteger currentOffset = BigInteger.valueOf(-1);
-//      GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
+      GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
 
       // Go through all the logAppendTimes for the same hashcode
       for (Map.Entry<BigInteger, ArrayList<KafkaEvent>> appendTime: hashcode.getValue().entrySet()){
@@ -206,23 +206,23 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
                 break;
               }
 
-//            if (sortedKafkaEvents.get(i).partition == initialPartition){
-//              gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
-//            }
-//            else{
-//              gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
-//            }
+              if (sortedKafkaEvents.get(i).partition == initialPartition){
+                gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
+              }
+              else{
+                gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
+              }
 
-//            gobblinTrackingEvent.addMetadata("topic", topicName);
-//            gobblinTrackingEvent.addMetadata("timeFirstRecord", String.valueOf(initialTime));
-//            gobblinTrackingEvent.addMetadata("timeCurrentRecord", String.valueOf(newTime));
-//            gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
-//            gobblinTrackingEvent.addMetadata("partitionFirstRecord", String.valueOf(initialPartition));
-//            gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(currentPartition));
-//            gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
-//            gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(currentOffset));
-//            eventSubmitter.submit(gobblinTrackingEvent);
-//            log.info("Logging event: " + gobblinTrackingEvent);
+              gobblinTrackingEvent.addMetadata("topic", topicName);
+              gobblinTrackingEvent.addMetadata("timeFirstRecord", String.valueOf(initialTime));
+              gobblinTrackingEvent.addMetadata("timeCurrentRecord", String.valueOf(newTime));
+              gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
+              gobblinTrackingEvent.addMetadata("partitionFirstRecord", String.valueOf(initialPartition));
+              gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(currentPartition));
+              gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
+              gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(currentOffset));
+              eventSubmitter.submit(gobblinTrackingEvent);
+              log.info("Logging event: " + gobblinTrackingEvent);
               updateGTECounters(1, context);
             }
           }

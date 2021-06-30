@@ -35,7 +35,6 @@ import org.apache.hadoop.mapreduce.Reducer;
 public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<KI, VI, KO, VO> {
   public enum EVENT_COUNTER {
     MORE_THAN_1, DEDUPED, GTE_EMITTED_EVENT, EXACT_DUPLICATES, RECORD_COUNT
-
   }
 
   /**
