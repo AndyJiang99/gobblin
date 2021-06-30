@@ -34,7 +34,8 @@ import org.apache.hadoop.mapreduce.Reducer;
  */
 public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<KI, VI, KO, VO> {
   public enum EVENT_COUNTER {
-    MORE_THAN_1, DEDUPED, GTE_EMITTED_EVENT, RECORD_COUNT
+    MORE_THAN_1, DEDUPED, GTE_EMITTED_EVENT, EXACT_DUPLICATES, RECORD_COUNT
+
   }
 
   /**
@@ -120,6 +121,12 @@ public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<
   protected void updateGTECounters(int emittedDuplicates, Context context){
     if (emittedDuplicates > 0) {
       context.getCounter(EVENT_COUNTER.GTE_EMITTED_EVENT).increment(1);
+    }
+  }
+
+  protected void updateExactDuplicateCounter(int exactDuplicates, Context context){
+    if (exactDuplicates > 0) {
+      context.getCounter(EVENT_COUNTER.EXACT_DUPLICATES).increment(1);
     }
   }
 }

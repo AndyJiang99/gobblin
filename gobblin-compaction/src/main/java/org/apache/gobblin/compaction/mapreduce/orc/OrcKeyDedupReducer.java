@@ -19,6 +19,7 @@ package org.apache.gobblin.compaction.mapreduce.orc;
 
 import com.typesafe.config.Config;
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.math.BigInteger;
@@ -26,6 +27,8 @@ import java.util.Properties;
 import java.util.TreeMap;
 import java.util.ArrayList;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
@@ -128,7 +131,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
       /**
        * Add hashcode, logAppendTime, offset, and partition to our map, both duplicates and non-duplicates
-       * Map structure: {hashcode, {logAppendTime, {partition, {offset, numTimesSeen}}}
+       * Map structure: {hashcode, {logAppendTime, [{partition, offset}]}
        */
 
       TreeMap<BigInteger, ArrayList<KafkaEvent>> temp = new TreeMap<>();
@@ -167,19 +170,34 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       BigInteger initialTime = BigInteger.valueOf(-1);
       int initialPartition = -1;
       BigInteger initialOffset = BigInteger.valueOf(-1);
-      GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
+
+      int currentPartition = -1;
+      BigInteger currentOffset = BigInteger.valueOf(-1);
+//      GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
 
       // Go through all the logAppendTimes for the same hashcode
       for (Map.Entry<BigInteger, ArrayList<KafkaEvent>> appendTime: hashcode.getValue().entrySet()){
-        for (int i = 0; i < appendTime.getValue().size(); i++){
+        Comparator<KafkaEvent> comparator = Comparator.comparing(event -> event.partition);
+        comparator = comparator.thenComparing(event -> event.offset);
+        Stream<KafkaEvent> sorted = appendTime.getValue().stream().sorted(comparator);
+        ArrayList<KafkaEvent> sortedKafkaEvents = new ArrayList<>(sorted.collect(Collectors.toList()));
+
+        for (int i = 0; i < sortedKafkaEvents.size(); i++){
           if (initialTime.equals(BigInteger.valueOf(-1)) && initialPartition == -1 && initialOffset.equals(BigInteger.valueOf(-1))){
             initialTime = appendTime.getKey();
-            initialPartition = hashcode.getValue().firstEntry().getValue().get(0).partition;
-            initialOffset = hashcode.getValue().firstEntry().getValue().get(0).offset;
+            initialPartition = currentPartition = hashcode.getValue().firstEntry().getValue().get(0).partition;
+            initialOffset = currentOffset = hashcode.getValue().firstEntry().getValue().get(0).offset;
+          }
+
+          if (currentPartition == sortedKafkaEvents.get(i).partition
+              && currentOffset.equals(sortedKafkaEvents.get(i).offset)){
+            updateExactDuplicateCounter(1, context);
           }
           else{
             BigInteger newTime = appendTime.getKey();
             BigInteger timeDiff = newTime.subtract(initialTime);
+            currentPartition = sortedKafkaEvents.get(i).partition;
+            currentOffset = sortedKafkaEvents.get(i).offset;
 
             if (topicName.equals("LixTreatmentsEvent") && timeDiff.divide(BigInteger.valueOf(1000))
                 .divide(BigInteger.valueOf(60))
@@ -187,23 +205,23 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
               break;
             }
 
-            if (appendTime.getValue().get(i).partition == initialPartition){
-              gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
-            }
-            else{
-              gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
-            }
+//            if (sortedKafkaEvents.get(i).partition == initialPartition){
+//              gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
+//            }
+//            else{
+//              gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
+//            }
 
-            gobblinTrackingEvent.addMetadata("topic", topicName);
-            gobblinTrackingEvent.addMetadata("timeFirstRecord", String.valueOf(initialTime));
-            gobblinTrackingEvent.addMetadata("timeCurrentRecord", String.valueOf(newTime));
-            gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
-            gobblinTrackingEvent.addMetadata("partitionFirstRecord", String.valueOf(initialPartition));
-            gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(appendTime.getValue().get(i).partition));
-            gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
-            gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(appendTime.getValue().get(i).offset));
-            eventSubmitter.submit(gobblinTrackingEvent);
-            log.info("Logging event: " + gobblinTrackingEvent);
+//            gobblinTrackingEvent.addMetadata("topic", topicName);
+//            gobblinTrackingEvent.addMetadata("timeFirstRecord", String.valueOf(initialTime));
+//            gobblinTrackingEvent.addMetadata("timeCurrentRecord", String.valueOf(newTime));
+//            gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
+//            gobblinTrackingEvent.addMetadata("partitionFirstRecord", String.valueOf(initialPartition));
+//            gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(currentPartition));
+//            gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
+//            gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(currentOffset));
+//            eventSubmitter.submit(gobblinTrackingEvent);
+//            log.info("Logging event: " + gobblinTrackingEvent);
             updateGTECounters(1, context);
           }
         }
