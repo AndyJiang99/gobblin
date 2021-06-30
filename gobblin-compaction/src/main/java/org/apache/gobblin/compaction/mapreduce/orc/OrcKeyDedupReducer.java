@@ -189,21 +189,22 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
             initialOffset = currentOffset = hashcode.getValue().firstEntry().getValue().get(0).offset;
           }
 
-          if (currentPartition == sortedKafkaEvents.get(i).partition
-              && currentOffset.equals(sortedKafkaEvents.get(i).offset)){
-            updateExactDuplicateCounter(1, context);
-          }
           else{
-            BigInteger newTime = appendTime.getKey();
-            BigInteger timeDiff = newTime.subtract(initialTime);
-            currentPartition = sortedKafkaEvents.get(i).partition;
-            currentOffset = sortedKafkaEvents.get(i).offset;
-
-            if (topicName.equals("LixTreatmentsEvent") && timeDiff.divide(BigInteger.valueOf(1000))
-                .divide(BigInteger.valueOf(60))
-                .compareTo(BigInteger.valueOf(15)) >= 0){
-              break;
+            if (currentPartition == sortedKafkaEvents.get(i).partition
+                && currentOffset.equals(sortedKafkaEvents.get(i).offset)){
+              updateExactDuplicateCounter(1, context);
             }
+            else {
+              BigInteger newTime = appendTime.getKey();
+              BigInteger timeDiff = newTime.subtract(initialTime);
+              currentPartition = sortedKafkaEvents.get(i).partition;
+              currentOffset = sortedKafkaEvents.get(i).offset;
+
+              if (topicName.equals("LixTreatmentsEvent") && timeDiff.divide(BigInteger.valueOf(1000))
+                  .divide(BigInteger.valueOf(60))
+                  .compareTo(BigInteger.valueOf(15)) >= 0) {
+                break;
+              }
 
 //            if (sortedKafkaEvents.get(i).partition == initialPartition){
 //              gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
@@ -222,7 +223,8 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 //            gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(currentOffset));
 //            eventSubmitter.submit(gobblinTrackingEvent);
 //            log.info("Logging event: " + gobblinTrackingEvent);
-            updateGTECounters(1, context);
+              updateGTECounters(1, context);
+            }
           }
         }
       }
