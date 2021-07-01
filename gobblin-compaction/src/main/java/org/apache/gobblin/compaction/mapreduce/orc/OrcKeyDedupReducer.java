@@ -202,7 +202,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
               if (topicName.equals("LixTreatmentsEvent") && timeDiff.divide(BigInteger.valueOf(1000))
                   .divide(BigInteger.valueOf(60))
-                  .compareTo(BigInteger.valueOf(15)) >= 0) {
+                  .compareTo(BigInteger.valueOf(15)) < 0){
                 break;
               }
 
