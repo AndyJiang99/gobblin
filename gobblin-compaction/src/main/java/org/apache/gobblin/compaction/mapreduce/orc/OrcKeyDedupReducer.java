@@ -29,7 +29,6 @@ import java.util.ArrayList;
 
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
 import org.apache.gobblin.configuration.DynamicConfigGenerator;
@@ -50,8 +49,8 @@ import org.apache.gobblin.metrics.event.GobblinEventBuilder;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
+import java.time.Instant;
 
-@Slf4j
 /**
  * Check record duplicates in reducer-side.
  */
@@ -221,8 +220,8 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
               gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(currentPartition));
               gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
               gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(currentOffset));
+              gobblinTrackingEvent.addMetadata("eventUnixTime", String.valueOf(Instant.now().toEpochMilli()));
               eventSubmitter.submit(gobblinTrackingEvent);
-              log.info("Logging event: " + gobblinTrackingEvent);
               updateGTECounters(1, context);
             }
           }
