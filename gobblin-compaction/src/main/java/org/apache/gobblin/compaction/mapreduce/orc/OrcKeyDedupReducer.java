@@ -204,7 +204,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
               BigInteger timeDiffMinutes = timeDiff.divide(BigInteger.valueOf(1000)).divide(BigInteger.valueOf(60));
 
-              if (topicName.equals("FeedServedEvent") || topicName.equals("SecurityHeaderErrorEvent") || topicName.equals("ContentFilteringEvent")){
+              if (topicName.equals("SecurityHeaderErrorEvent") || topicName.equals("ContentFilteringEvent")){
                 if (timeDiffMinutes.compareTo(BigInteger.valueOf(5)) < 0){
                   updateTimeRangeCounter(0, context);
                 }
