@@ -135,7 +135,7 @@ public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<
       context.getCounter(EVENT_COUNTER.values()[timeRange + 5]).increment(1);
     }
     else{
-      context.getCounter((EVENT_COUNTER.values()[17])).increment(1);
+      context.getCounter(EVENT_COUNTER.values()[17]).increment(1);
     }
   }
 }
