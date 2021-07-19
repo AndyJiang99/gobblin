@@ -205,36 +205,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
               BigInteger timeDiffMinutes = timeDiff.divide(BigInteger.valueOf(1000)).divide(BigInteger.valueOf(60));
 
               if (topicName.equals("SecurityHeaderErrorEvent") || topicName.equals("ContentFilteringEvent")){
-                if (timeDiffMinutes.compareTo(BigInteger.valueOf(5)) < 0){
-                  updateTimeRangeCounter(0, context);
-                }
-                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(10)) < 0){
-                  updateTimeRangeCounter(5, context);
-                }
-                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(15)) < 0){
-                  updateTimeRangeCounter(10, context);
-                }
-                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(20)) < 0){
-                  updateTimeRangeCounter(15, context);
-                }
-                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(25)) < 0){
-                  updateTimeRangeCounter(20, context);
-                }
-                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(30)) < 0){
-                  updateTimeRangeCounter(25, context);
-                }
-                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(40)) < 0){
-                  updateTimeRangeCounter(30, context);
-                }
-                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(50)) < 0){
-                  updateTimeRangeCounter(40, context);
-                }
-                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(60)) < 0){
-                  updateTimeRangeCounter(50, context);
-                }
-                else{
-                  updateTimeRangeCounter(60, context);
-                }
+                updateTimeRangeCounter(timeDiffMinutes.intValue() / 5 * 5, context);
                 break;
               }
 

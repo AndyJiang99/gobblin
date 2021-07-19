@@ -35,7 +35,7 @@ import org.apache.hadoop.mapreduce.Reducer;
 public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<KI, VI, KO, VO> {
   public enum EVENT_COUNTER {
     MORE_THAN_1, DEDUPED, GTE_EMITTED_EVENT, EXACT_DUPLICATES, RECORD_COUNT,
-    RANGE_0_5, RANGE_5_10, RANGE_10_15, RANGE_15_20, RANGE_20_25, RANGE_25_30, RANGE_30_40, RANGE_40_50, RANGE_50_60, RANGE_OVER_60
+    RANGE_0_5, RANGE_5_10, RANGE_10_15, RANGE_15_20, RANGE_20_25, RANGE_25_30, RANGE_30_35, RANGE_35_40, RANGE_40_45, RANGE_45_50, RANGE_50_55, RANGE_55_60, RANGE_OVER_60
   }
 
   /**
@@ -151,15 +151,24 @@ public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<
         context.getCounter(EVENT_COUNTER.RANGE_25_30).increment(1);
         break;
       case 30:
-        context.getCounter(EVENT_COUNTER.RANGE_30_40).increment(1);
+        context.getCounter(EVENT_COUNTER.RANGE_30_35).increment(1);
+        break;
+      case 35:
+        context.getCounter(EVENT_COUNTER.RANGE_35_40).increment(1);
         break;
       case 40:
-        context.getCounter(EVENT_COUNTER.RANGE_40_50).increment(1);
+        context.getCounter(EVENT_COUNTER.RANGE_40_45).increment(1);
+        break;
+      case 45:
+        context.getCounter(EVENT_COUNTER.RANGE_45_50).increment(1);
         break;
       case 50:
-        context.getCounter(EVENT_COUNTER.RANGE_50_60).increment(1);
+        context.getCounter(EVENT_COUNTER.RANGE_50_55).increment(1);
         break;
-      case 60:
+      case 55:
+        context.getCounter(EVENT_COUNTER.RANGE_55_60).increment(1);
+        break;
+      default:
         context.getCounter(EVENT_COUNTER.RANGE_OVER_60).increment(1);
         break;
     }
