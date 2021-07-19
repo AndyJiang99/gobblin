@@ -29,6 +29,7 @@ import java.util.ArrayList;
 
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
 import org.apache.gobblin.configuration.DynamicConfigGenerator;
@@ -51,6 +52,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import java.time.Instant;
 
+@Slf4j
 /**
  * Check record duplicates in reducer-side.
  */
@@ -191,6 +193,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
           else{
             if (currentPartition == sortedKafkaEvents.get(i).partition
                 && currentOffset.equals(sortedKafkaEvents.get(i).offset)){
+              log.info("Topic: " + topicName + ", Record Time: " + appendTime.getKey() + ", Partition: " + sortedKafkaEvents.get(i).partition + ", Offset: " + sortedKafkaEvents.get(i).offset);
               updateExactDuplicateCounter(1, context);
             }
             else {
@@ -199,9 +202,43 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
               currentPartition = sortedKafkaEvents.get(i).partition;
               currentOffset = sortedKafkaEvents.get(i).offset;
 
-              if (topicName.equals("LixTreatmentsEvent") && timeDiff.divide(BigInteger.valueOf(1000))
-                  .divide(BigInteger.valueOf(60))
-                  .compareTo(BigInteger.valueOf(15)) < 0){
+              BigInteger timeDiffMinutes = timeDiff.divide(BigInteger.valueOf(1000)).divide(BigInteger.valueOf(60));
+
+              if (topicName.equals("FeedServedEvent") || topicName.equals("SecurityHeaderErrorEvent") || topicName.equals("ContentFilteringEvent")){
+                if (timeDiffMinutes.compareTo(BigInteger.valueOf(5)) < 0){
+                  updateTimeRangeCounter(0, context);
+                }
+                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(10)) < 0){
+                  updateTimeRangeCounter(5, context);
+                }
+                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(15)) < 0){
+                  updateTimeRangeCounter(10, context);
+                }
+                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(20)) < 0){
+                  updateTimeRangeCounter(15, context);
+                }
+                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(25)) < 0){
+                  updateTimeRangeCounter(20, context);
+                }
+                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(30)) < 0){
+                  updateTimeRangeCounter(25, context);
+                }
+                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(40)) < 0){
+                  updateTimeRangeCounter(30, context);
+                }
+                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(50)) < 0){
+                  updateTimeRangeCounter(40, context);
+                }
+                else if (timeDiffMinutes.compareTo(BigInteger.valueOf(60)) < 0){
+                  updateTimeRangeCounter(50, context);
+                }
+                else{
+                  updateTimeRangeCounter(60, context);
+                }
+                break;
+              }
+
+              if (topicName.equals("LixTreatmentsEvent") && timeDiffMinutes.compareTo(BigInteger.valueOf(15)) < 0){
                 break;
               }
 
