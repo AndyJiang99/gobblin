@@ -131,11 +131,11 @@ public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<
   }
 
   protected void updateTimeRangeCounter(int timeRange, Context context){
-    try {
+    if (timeRange < 12){
       context.getCounter(EVENT_COUNTER.values()[timeRange + 5]).increment(1);
     }
-    catch(Exception e){
-      context.getCounter((EVENT_COUNTER.values()[EVENT_COUNTER.values().length - 1]));
+    else{
+      context.getCounter((EVENT_COUNTER.values()[17])).increment(1);
     }
   }
 }
