@@ -131,46 +131,11 @@ public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<
   }
 
   protected void updateTimeRangeCounter(int timeRange, Context context){
-    switch (timeRange){
-      case 0:
-        context.getCounter(EVENT_COUNTER.RANGE_0_5).increment(1);
-        break;
-      case 5:
-        context.getCounter(EVENT_COUNTER.RANGE_5_10).increment(1);
-        break;
-      case 10:
-        context.getCounter(EVENT_COUNTER.RANGE_10_15).increment(1);
-        break;
-      case 15:
-        context.getCounter(EVENT_COUNTER.RANGE_15_20).increment(1);
-        break;
-      case 20:
-        context.getCounter(EVENT_COUNTER.RANGE_20_25).increment(1);
-        break;
-      case 25:
-        context.getCounter(EVENT_COUNTER.RANGE_25_30).increment(1);
-        break;
-      case 30:
-        context.getCounter(EVENT_COUNTER.RANGE_30_35).increment(1);
-        break;
-      case 35:
-        context.getCounter(EVENT_COUNTER.RANGE_35_40).increment(1);
-        break;
-      case 40:
-        context.getCounter(EVENT_COUNTER.RANGE_40_45).increment(1);
-        break;
-      case 45:
-        context.getCounter(EVENT_COUNTER.RANGE_45_50).increment(1);
-        break;
-      case 50:
-        context.getCounter(EVENT_COUNTER.RANGE_50_55).increment(1);
-        break;
-      case 55:
-        context.getCounter(EVENT_COUNTER.RANGE_55_60).increment(1);
-        break;
-      default:
-        context.getCounter(EVENT_COUNTER.RANGE_OVER_60).increment(1);
-        break;
+    try {
+      context.getCounter(EVENT_COUNTER.values()[timeRange + 5]).increment(1);
+    }
+    catch(Exception e){
+      context.getCounter((EVENT_COUNTER.values()[EVENT_COUNTER.values().length - 1]));
     }
   }
 }
