@@ -157,7 +157,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
       temp.put(timestamp, kafkaPartitionOffset);
       recordFirstView.put(valueHash, temp);
     }
-
+    presetEnums(context);
     emitEvents(topicName, recordFirstView, context);
 
     /* At this point, keyset of valuesToRetain should contains all different OrcValue. */
@@ -205,8 +205,20 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
               BigInteger timeDiffMinutes = timeDiff.divide(BigInteger.valueOf(1000)).divide(BigInteger.valueOf(60));
 
               updateTimeRangeCounter(timeDiffMinutes.intValue() / 5, context);
+              setLargestRange(timeDiff.longValue(), context);
 
-              if (topicName.equals("SecurityHeaderErrorEvent") || topicName.equals("ContentFilteringEvent") || (topicName.equals("LixTreatmentsEvent") && timeDiffMinutes.compareTo(BigInteger.valueOf(15)) < 0)){
+              if (topicName.equals("InvitationScoreEvent")
+                  || topicName.equals("MooJobPostingsRankingEvent")
+                  || topicName.equals("ZephyrConversationsImpressionEvent")
+                  || topicName.equals("ZephyrMessageReceivedEvent")
+                  || topicName.equals("ZephyrConversationDetailImpressionEvent")
+                  || topicName.equals("fx-lifecycle-event")
+                  || topicName.equals("feed-indexing-tensor-features")
+                  || topicName.equals("MemberCustomerMap")
+                  || topicName.equals("frame-monitor-online")
+                  || topicName.equals("SecurityHeaderErrorEvent")
+                  || topicName.equals("ContentFilteringEvent")
+                  || (topicName.equals("LixTreatmentsEvent") && timeDiffMinutes.compareTo(BigInteger.valueOf(15)) < 0)){
                 break;
               }
 
