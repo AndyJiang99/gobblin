@@ -34,8 +34,10 @@ import org.apache.hadoop.mapreduce.Reducer;
  */
 public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<KI, VI, KO, VO> {
   public enum EVENT_COUNTER {
-    MORE_THAN_1, DEDUPED, GTE_EMITTED_EVENT, EXACT_DUPLICATES, RECORD_COUNT, RANGE_MAX,
-    RANGE_00_05, RANGE_05_10, RANGE_10_15, RANGE_15_20, RANGE_20_25, RANGE_25_30, RANGE_30_35, RANGE_35_40, RANGE_40_45, RANGE_45_50, RANGE_50_55, RANGE_55_60, RANGE_OVER_60
+    MORE_THAN_1, DEDUPED, GTE_EMITTED_EVENT, EXACT_DUPLICATES, RECORD_COUNT,
+    RANGE_MAX, RANGE_OFFSET, RANGE_00_05, RANGE_05_10, RANGE_10_15,
+    RANGE_15_20, RANGE_20_25, RANGE_25_30, RANGE_30_35, RANGE_35_40,
+    RANGE_40_45, RANGE_45_50, RANGE_50_55, RANGE_55_60, RANGE_60_OVER
   }
 
   /**
@@ -132,17 +134,17 @@ public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<
 
   protected void updateTimeRangeCounter(int timeRange, Context context){
     if (timeRange < 12){
-      context.getCounter(EVENT_COUNTER.values()[timeRange + 6]).increment(1);
+      context.getCounter(EVENT_COUNTER.values()[timeRange + 7]).increment(1);
     }
     else{
-      context.getCounter(EVENT_COUNTER.values()[18]).increment(1);
+      context.getCounter(EVENT_COUNTER.values()[EVENT_COUNTER.values().length - 1]).increment(1);
     }
   }
 
   // Preset the enum values for the RANGES so that it is deterministic as to the index mapping to the RANGES
   protected void presetEnums(Context context){
     for (int index = 5; index < EVENT_COUNTER.values().length; index++){
-        context.getCounter(EVENT_COUNTER.values()[index]).setValue(1);
+      context.getCounter(EVENT_COUNTER.values()[index]).setValue(1);
     }
   }
 
