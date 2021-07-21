@@ -77,7 +77,6 @@ public abstract class RecordKeyDedupReducerBase<KI, VI, KO, VO> extends Reducer<
     int numVals = 0;
 
     VI valueToRetain = null;
-    presetEnums(context);
 
     // Preserve only one values among all duplicates.
     for (VI value : values) {

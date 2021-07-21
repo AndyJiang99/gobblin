@@ -88,6 +88,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
     } catch (MultiReporterException e) {
       e.printStackTrace();
     }
+    presetEnums(context);
     this.metricContext = gobblinMetrics.getMetricContext().childBuilder("reducer").build();
     this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblin.DuplicateEvents").build();
   }
