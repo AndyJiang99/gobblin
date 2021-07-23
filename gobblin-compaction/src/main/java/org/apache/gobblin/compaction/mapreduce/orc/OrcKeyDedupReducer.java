@@ -206,7 +206,6 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
               BigInteger timeDiffMinutes = timeDiff.divide(BigInteger.valueOf(1000)).divide(BigInteger.valueOf(60));
 
               updateTimeRangeCounter(timeDiffMinutes.intValue() / 5, context);
-              setLargestRange(timeDiff.longValue(), context);
 
               String[] blackListTopics = {"InvitationScoreEvent","MooJobPostingsRankingEvent","ZephyrConversationsImpressionEvent",
                   "ZephyrMessageReceivedEvent","ZephyrConversationDetailImpressionEvent","fx-lifecycle-event","feed-indexing-tensor-features",
