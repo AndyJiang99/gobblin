@@ -19,6 +19,8 @@ package org.apache.gobblin.compaction.mapreduce.orc;
 
 import com.typesafe.config.Config;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.math.BigInteger;
@@ -26,6 +28,8 @@ import java.util.Properties;
 import java.util.TreeMap;
 import java.util.ArrayList;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
@@ -47,6 +51,7 @@ import org.apache.gobblin.metrics.event.GobblinEventBuilder;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
+import java.time.Instant;
 
 @Slf4j
 /**
@@ -56,6 +61,10 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
   protected EventSubmitter eventSubmitter;
   protected MetricContext metricContext;
+  class KafkaEvent{
+    int partition;
+    BigInteger offset;
+  }
   @VisibleForTesting
   public static final String ORC_DELTA_SCHEMA_PROVIDER =
       "org.apache.gobblin.compaction." + OrcKeyDedupReducer.class.getSimpleName() + ".deltaFieldsProvider";
@@ -79,6 +88,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
     } catch (MultiReporterException e) {
       e.printStackTrace();
     }
+    presetEnums(context);
     this.metricContext = gobblinMetrics.getMetricContext().childBuilder("reducer").build();
     this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblin.DuplicateEvents").build();
   }
@@ -100,7 +110,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
     /* Map from hash of value(Typed in OrcStruct) object to its times of duplication*/
     Map<Integer, Integer> valuesToRetain = new HashMap<>();
     // New map of values of first record
-    Map<Integer, TreeMap<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>>> recordFirstView = new HashMap<>();
+    Map<Integer, TreeMap<BigInteger, ArrayList<KafkaEvent>>> recordFirstView = new HashMap<>();
     int valueHash = 0;
     String topicName = "";
 
@@ -124,100 +134,105 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
       /**
        * Add hashcode, logAppendTime, offset, and partition to our map, both duplicates and non-duplicates
-       * Map structure: {hashcode, {logAppendTime, {partition, {offset, numTimesSeen}}}
+       * Map structure: {hashcode, {logAppendTime, [{partition, offset}]}
        */
 
-      TreeMap<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>> temp = new TreeMap<>();
-      Map<Integer, Map<BigInteger, BigInteger>> kafkaInfo = new HashMap<>();
-      Map<BigInteger, BigInteger> occurrence = new HashMap<>();
+      TreeMap<BigInteger, ArrayList<KafkaEvent>> temp = new TreeMap<>();
+      ArrayList<KafkaEvent> kafkaPartitionOffset = new ArrayList<KafkaEvent>();
 
       BigInteger timestamp = BigInteger.valueOf(Long.parseLong(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("timestamp"))));
       int partition = Integer.parseInt(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("partition")));
       BigInteger offset = BigInteger.valueOf(Long.parseLong(String.valueOf(((OrcStruct)((OrcStruct)value.value).getFieldValue("_kafkaMetadata")).getFieldValue("offset"))));
 
-      BigInteger timesSeen = BigInteger.valueOf(1);
-      boolean prevSeen = false;
-
-      // If the hashcode already exists
       if (recordFirstView.containsKey(valueHash)){
         temp = recordFirstView.get(valueHash);
       }
       // If the logAppendTime already exists
       if (temp.containsKey(timestamp)){
-        kafkaInfo = temp.get(timestamp);
+        kafkaPartitionOffset = temp.get(timestamp);
       }
-      // If the partition already exists
-      if (kafkaInfo.containsKey(partition)){
-        occurrence = kafkaInfo.get(partition);
-      }
-      /** If the offset already exists, then we know we have seen a record that's exactly as one previously.
-       *  Increment number of times we've seen this record
-       */
-      if (occurrence.containsKey(offset)){
-        timesSeen = occurrence.get(offset).add(BigInteger.valueOf(1));
-        occurrence.replace(offset, timesSeen);
-        prevSeen = true;
-      }
-      // Fallback case in case this record wasn't seen previously at all. Insert default value into map
-      if (prevSeen == false){
-        occurrence.put(offset, timesSeen);
-      }
-      kafkaInfo.put(partition, occurrence);
-      temp.put(timestamp, kafkaInfo);
+      KafkaEvent newEvent = new KafkaEvent();
+      newEvent.partition = partition;
+      newEvent.offset = offset;
+
+      kafkaPartitionOffset.add(newEvent);
+      temp.put(timestamp, kafkaPartitionOffset);
       recordFirstView.put(valueHash, temp);
     }
-
     emitEvents(topicName, recordFirstView, context);
 
     /* At this point, keyset of valuesToRetain should contains all different OrcValue. */
     for (Map.Entry<Integer, Integer> entry : valuesToRetain.entrySet()) {
-      updateCounters(entry.getValue(), -1, context);
+      updateCounters(entry.getValue(), context);
     }
   }
 
-  private void emitEvents(String topicName, Map<Integer, TreeMap<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>>> recordFirstView, Context context){
-    // Emitting the duplicates in the TreeMap
-    // Go through all of the hashcodes
-    for (Map.Entry<Integer, TreeMap<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>>> hashcode: recordFirstView.entrySet()){
+  private void emitEvents(String topicName, Map<Integer, TreeMap<BigInteger, ArrayList<KafkaEvent>>> recordFirstView, Context context){
+    for (Map.Entry<Integer, TreeMap<BigInteger, ArrayList<KafkaEvent>>> hashcode: recordFirstView.entrySet()){
       BigInteger initialTime = BigInteger.valueOf(-1);
       int initialPartition = -1;
       BigInteger initialOffset = BigInteger.valueOf(-1);
+
+      int currentPartition = -1;
+      BigInteger currentOffset = BigInteger.valueOf(-1);
       GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
 
       // Go through all the logAppendTimes for the same hashcode
-      for (Map.Entry<BigInteger, Map<Integer, Map<BigInteger, BigInteger>>> appendTime: hashcode.getValue().entrySet()){
-        // Set the values for the first element by hashcode
-        if (initialTime.equals(BigInteger.valueOf(-1)) && initialPartition == -1 && initialOffset.equals(BigInteger.valueOf(-1))){
-          initialTime = appendTime.getKey();
-          initialPartition = hashcode.getValue().firstEntry().getValue().entrySet().stream().findFirst().get().getKey();
-          initialOffset = hashcode.getValue().firstEntry().getValue().entrySet().stream().findFirst().get().getValue().entrySet().stream().findFirst().get().getKey();
-        }
-        else{
-          BigInteger newTime = appendTime.getKey();
-          BigInteger timeDiff = newTime.subtract(initialTime);
+      for (Map.Entry<BigInteger, ArrayList<KafkaEvent>> appendTime: hashcode.getValue().entrySet()){
+        Comparator<KafkaEvent> comparator = Comparator.comparing(event -> event.partition);
+        comparator = comparator.thenComparing(event -> event.offset);
+        Stream<KafkaEvent> sorted = appendTime.getValue().stream().sorted(comparator);
+        ArrayList<KafkaEvent> sortedKafkaEvents = new ArrayList<>(sorted.collect(Collectors.toList()));
 
-          // Go through all the partitions with the same hashcode and logAppendTime
-          for (Map.Entry<Integer, Map<BigInteger, BigInteger>> infoFromKafka: appendTime.getValue().entrySet()){
-            // Go through all the offsets with the same hashcode and logAppendTime and partition
-            for (Map.Entry<BigInteger, BigInteger> iterateOccurrences: infoFromKafka.getValue().entrySet()){
-              if (infoFromKafka.getKey() == initialPartition){
+        for (int i = 0; i < sortedKafkaEvents.size(); i++){
+          if (initialTime.equals(BigInteger.valueOf(-1)) && initialPartition == -1 && initialOffset.equals(BigInteger.valueOf(-1))){
+            initialTime = appendTime.getKey();
+            initialPartition = currentPartition = hashcode.getValue().firstEntry().getValue().get(0).partition;
+            initialOffset = currentOffset = hashcode.getValue().firstEntry().getValue().get(0).offset;
+          }
+
+          else{
+            if (currentPartition == sortedKafkaEvents.get(i).partition
+                && currentOffset.equals(sortedKafkaEvents.get(i).offset)){
+              log.info("Topic: " + topicName + ", Record Time: " + appendTime.getKey() + ", Partition: " + sortedKafkaEvents.get(i).partition + ", Offset: " + sortedKafkaEvents.get(i).offset);
+              updateExactDuplicateCounter(1, context);
+            }
+            else {
+              BigInteger newTime = appendTime.getKey();
+              BigInteger timeDiff = newTime.subtract(initialTime);
+              currentPartition = sortedKafkaEvents.get(i).partition;
+              currentOffset = sortedKafkaEvents.get(i).offset;
+
+              BigInteger timeDiffMinutes = timeDiff.divide(BigInteger.valueOf(1000)).divide(BigInteger.valueOf(60));
+
+              updateTimeRangeCounter(timeDiffMinutes.intValue() / 5, context);
+
+              String[] blackListTopics = {"InvitationScoreEvent","MooJobPostingsRankingEvent","ZephyrConversationsImpressionEvent",
+                  "ZephyrMessageReceivedEvent","ZephyrConversationDetailImpressionEvent","fx-lifecycle-event","feed-indexing-tensor-features",
+                  "MemberCustomerMap","frame-monitor-online","SecurityHeaderErrorEvent","ContentFilteringEvent","LixTreatmentsEvent"};
+
+              if (Arrays.asList(blackListTopics).contains(topicName)){
+                break;
+              }
+
+              if (sortedKafkaEvents.get(i).partition == initialPartition){
                 gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(true));
               }
               else{
                 gobblinTrackingEvent.addMetadata("partitionSimilarity", String.valueOf(false));
               }
+
               gobblinTrackingEvent.addMetadata("topic", topicName);
               gobblinTrackingEvent.addMetadata("timeFirstRecord", String.valueOf(initialTime));
               gobblinTrackingEvent.addMetadata("timeCurrentRecord", String.valueOf(newTime));
               gobblinTrackingEvent.addMetadata("timeDiff", String.valueOf(timeDiff));
               gobblinTrackingEvent.addMetadata("partitionFirstRecord", String.valueOf(initialPartition));
-              gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(infoFromKafka.getKey()));
+              gobblinTrackingEvent.addMetadata("partitionCurrentRecord", String.valueOf(currentPartition));
               gobblinTrackingEvent.addMetadata("offsetFirstRecord", String.valueOf(initialOffset));
-              gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(iterateOccurrences.getKey()));
-              gobblinTrackingEvent.addMetadata("occurrences", String.valueOf(iterateOccurrences.getValue()));
+              gobblinTrackingEvent.addMetadata("offsetCurrentRecord", String.valueOf(currentOffset));
+              gobblinTrackingEvent.addMetadata("eventUnixTime", String.valueOf(Instant.now().toEpochMilli()));
               eventSubmitter.submit(gobblinTrackingEvent);
-              log.info("Logging event: " + gobblinTrackingEvent);
-              updateCounters(-1, 1, context);
+              updateGTECounters(1, context);
             }
           }
         }

@@ -43,6 +43,16 @@ import org.testng.annotations.Test;
  */
 public class OrcKeyComparatorTest {
   @Test
+  public enum EVENT_COUNTER {
+    MORE_THAN_1, DEDUPED, GTE_EMITTED_EVENT, EXACT_DUPLICATES, RECORD_COUNT, MAX_RANGE,
+    RANGE_0_5, RANGE_5_10, RANGE_10_15, RANGE_15_20, RANGE_20_25, RANGE_25_30, RANGE_30_35, RANGE_35_40, RANGE_40_45, RANGE_45_50, RANGE_50_55, RANGE_55_60, RANGE_OVER_60
+  }
+  @Test
+  public void testEnumIndex() throws Exception{
+    Assert.assertEquals(EVENT_COUNTER.values()[18].toString(), "RANGE_OVER_60");
+  }
+
+  @Test
   public void testSimpleComparator() throws Exception {
     OrcKeyComparator comparator = new OrcKeyComparator();
     Configuration conf = new Configuration();
