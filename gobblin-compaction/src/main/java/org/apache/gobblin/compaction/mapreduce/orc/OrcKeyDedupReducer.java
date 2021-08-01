@@ -90,7 +90,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
     }
     presetEnums(context);
     this.metricContext = gobblinMetrics.getMetricContext().childBuilder("reducer").build();
-    this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblin.DuplicateEvents").build();
+    this.eventSubmitter = new EventSubmitter.Builder(this.metricContext, "gobblin.DuplicateEvents.inlinePOC").build();
   }
 
   @Override
@@ -175,7 +175,7 @@ public class OrcKeyDedupReducer extends RecordKeyDedupReducerBase<OrcKey, OrcVal
 
       int currentPartition = -1;
       BigInteger currentOffset = BigInteger.valueOf(-1);
-      GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang");
+      GobblinEventBuilder gobblinTrackingEvent = new GobblinEventBuilder("Gobblin duplicate events - andjiang - inlinePOC");
 
       // Go through all the logAppendTimes for the same hashcode
       for (Map.Entry<BigInteger, ArrayList<KafkaEvent>> appendTime: hashcode.getValue().entrySet()){
