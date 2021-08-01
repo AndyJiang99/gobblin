@@ -25,9 +25,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.locks.ReadWriteLock;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.fs.Path;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
@@ -349,7 +347,7 @@ public class GitFlowGraphMonitor extends GitMonitoringService {
     //Get the logical names of SpecExecutors where the FlowEdge can be executed.
     List<String> specExecutorNames = ConfigUtils.getStringList(edgeConfig, FlowGraphConfigurationKeys.FLOW_EDGE_SPEC_EXECUTORS_KEY);
     //Load all the SpecExecutor configurations for this FlowEdge from the SpecExecutor Catalog.
-    List<SpecExecutor> specExecutors = new ArrayList<>();
+    List<SpecExecutor> specExecutors = new ArrayList<>(specExecutorNames.size());
     for (String specExecutorName: specExecutorNames) {
       URI specExecutorUri = new URI(specExecutorName);
       specExecutors.add(this.topologySpecMap.get(specExecutorUri).getSpecExecutor());

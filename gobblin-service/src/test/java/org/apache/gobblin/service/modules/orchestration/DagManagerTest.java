@@ -47,6 +47,8 @@ import com.typesafe.config.ConfigValueFactory;
 
 import org.apache.gobblin.config.ConfigBuilder;
 import org.apache.gobblin.configuration.ConfigurationKeys;
+import org.apache.gobblin.instrumented.Instrumented;
+import org.apache.gobblin.metrics.MetricContext;
 import org.apache.gobblin.runtime.api.JobSpec;
 import org.apache.gobblin.runtime.api.SpecExecutor;
 import org.apache.gobblin.runtime.spec_executorInstance.MockedSpecExecutor;
@@ -57,6 +59,7 @@ import org.apache.gobblin.service.modules.spec.JobExecutionPlan;
 import org.apache.gobblin.service.modules.spec.JobExecutionPlanDagFactory;
 import org.apache.gobblin.service.monitoring.JobStatus;
 import org.apache.gobblin.service.monitoring.JobStatusRetriever;
+import org.apache.gobblin.util.ConfigUtils;
 
 
 public class DagManagerTest {
@@ -84,8 +87,10 @@ public class DagManagerTest {
     this.queue = new LinkedBlockingQueue<>();
     this.cancelQueue = new LinkedBlockingQueue<>();
     this.resumeQueue = new LinkedBlockingQueue<>();
+    MetricContext metricContext = Instrumented.getMetricContext(ConfigUtils.configToState(ConfigFactory.empty()), getClass());
     this._dagManagerThread = new DagManager.DagManagerThread(_jobStatusRetriever, _dagStateStore, failedDagStateStore, queue, cancelQueue,
-        resumeQueue, true, 5, new HashMap<>(), new HashSet<>());
+        resumeQueue, true, 5, new HashMap<>(), new HashSet<>(), metricContext.contextAwareMeter("successMeter"),
+        metricContext.contextAwareMeter("failedMeter"));
 
     Field jobToDagField = DagManager.DagManagerThread.class.getDeclaredField("jobToDag");
     jobToDagField.setAccessible(true);
@@ -193,6 +198,7 @@ public class DagManagerTest {
     Assert.assertTrue(this.jobToDag.containsKey(dag.getStartNodes().get(0)));
     Assert.assertEquals(this.dagToJobs.get(dagId).size(), 1);
     Assert.assertTrue(this.dagToJobs.get(dagId).contains(dag.getStartNodes().get(0)));
+    Assert.assertEquals(this.dags.get(dagId).getNodes().get(0).getValue().getCurrentAttempts(), 1);
 
     //Run the thread 2nd time. Ensure the job0 is complete and job1 and job2 are submitted.
     this._dagManagerThread.run();
@@ -405,6 +411,9 @@ public class DagManagerTest {
     this._dagManagerThread.run();
     Assert.assertFalse(this.failedDagIds.contains(dagId));
     Assert.assertTrue(this.dags.containsKey(dagId));
+
+    // Verify the current attempt number
+    Assert.assertEquals(dag.getNodes().get(2).getValue().getCurrentAttempts(), 1);
 
     // Job2 complete
     this._dagManagerThread.run();

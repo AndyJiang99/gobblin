@@ -35,6 +35,8 @@ public class ServiceConfigKeys {
   public static final String GOBBLIN_SERVICE_GIT_CONFIG_MONITOR_ENABLED_KEY = GOBBLIN_SERVICE_PREFIX + "gitConfigMonitor.enabled";
   public static final String GOBBLIN_SERVICE_DAG_MANAGER_ENABLED_KEY = GOBBLIN_SERVICE_PREFIX + "dagManager.enabled";
   public static final String GOBBLIN_SERVICE_JOB_STATUS_MONITOR_ENABLED_KEY = GOBBLIN_SERVICE_PREFIX + "jobStatusMonitor.enabled";
+  // If true, will mark up/down d2 servers on leadership so that all requests will be routed to the leader node
+  public static final String GOBBLIN_SERVICE_D2_ONLY_ANNOUNCE_LEADER = GOBBLIN_SERVICE_PREFIX + "d2.onlyAnnounceLeader";
 
   // Helix / ServiceScheduler Keys
   public static final String HELIX_CLUSTER_NAME_KEY = GOBBLIN_SERVICE_PREFIX + "helix.cluster.name";
@@ -132,4 +134,13 @@ public class ServiceConfigKeys {
   // Group Membership authentication service
   public static final String GROUP_OWNERSHIP_SERVICE_CLASS = GOBBLIN_SERVICE_PREFIX + "groupOwnershipService.class";
   public static final String DEFAULT_GROUP_OWNERSHIP_SERVICE = "org.apache.gobblin.service.NoopGroupOwnershipService";
+
+  public static final int MAX_FLOW_NAME_LENGTH = 128; // defined in FlowId.pdl
+  public static final int MAX_FLOW_GROUP_LENGTH = 128; // defined in FlowId.pdl
+  public static final int MAX_JOB_NAME_LENGTH = 374;
+  public static final int MAX_JOB_GROUP_LENGTH = 374;
+  public static final String STATE_STORE_TABLE_SUFFIX = "gst";
+  public static final String STATE_STORE_KEY_SEPARATION_CHARACTER = ".";
+  public static final String DAG_STORE_KEY_SEPARATION_CHARACTER = "_";
+
 }

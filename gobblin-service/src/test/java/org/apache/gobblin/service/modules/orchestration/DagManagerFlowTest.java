@@ -44,7 +44,6 @@ import org.apache.gobblin.service.FlowId;
 import org.apache.gobblin.service.modules.flowgraph.Dag;
 import org.apache.gobblin.service.modules.spec.JobExecutionPlan;
 import org.apache.gobblin.service.monitoring.JobStatusRetriever;
-import org.apache.gobblin.service.monitoring.KafkaJobStatusMonitor;
 import org.apache.gobblin.testing.AssertWithBackoff;
 import org.apache.gobblin.util.ConfigUtils;
 
@@ -297,20 +296,14 @@ class CancelPredicate implements Predicate<Void> {
 class MockedDagManager extends DagManager {
 
   public MockedDagManager(Config config, boolean instrumentationEnabled) {
-    super(config, instrumentationEnabled);
+    super(config, createJobStatusRetriever(), instrumentationEnabled);
   }
 
-  @Override
-  JobStatusRetriever createJobStatusRetriever(Config config) {
+  private static JobStatusRetriever createJobStatusRetriever() {
     JobStatusRetriever mockedJbStatusRetriever = Mockito.mock(JobStatusRetriever.class);
     Mockito.doReturn(Collections.emptyIterator()).when(mockedJbStatusRetriever).
         getJobStatusesForFlowExecution(anyString(), anyString(), anyLong(), anyString(), anyString());
     return  mockedJbStatusRetriever;
-  }
-
-  @Override
-  KafkaJobStatusMonitor createJobStatusMonitor(Config config) {
-    return null;
   }
 
   @Override

@@ -17,7 +17,6 @@
 
 package org.apache.gobblin.runtime.spec_catalog;
 
-import com.google.common.base.Throwables;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
@@ -29,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.commons.lang3.reflect.ConstructorUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +39,8 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 
 import javax.annotation.Nonnull;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import lombok.Getter;
 
 import org.apache.gobblin.instrumented.Instrumented;
@@ -69,6 +69,7 @@ import org.apache.gobblin.util.callbacks.CallbacksDispatcher;
  * A service that interact with FlowSpec storage.
  * The FlowSpec storage, a.k.a. {@link SpecStore} should be plugable with different implementation.
  */
+@Singleton
 public class FlowCatalog extends AbstractIdleService implements SpecCatalog, MutableSpecCatalog {
 
   /***
@@ -100,6 +101,7 @@ public class FlowCatalog extends AbstractIdleService implements SpecCatalog, Mut
     this(config, log, Optional.<MetricContext>absent(), true);
   }
 
+  @Inject
   public FlowCatalog(Config config, GobblinInstanceEnvironment env) {
     this(config, Optional.of(env.getLog()), Optional.of(env.getMetricContext()),
         env.isInstrumentationEnabled());
@@ -341,16 +343,9 @@ public class FlowCatalog extends AbstractIdleService implements SpecCatalog, Mut
 
     if (triggerListener) {
       AddSpecResponse<CallbacksDispatcher.CallbackResults<SpecCatalogListener, AddSpecResponse>> response = this.listeners.onAddSpec(flowSpec);
-      // If flow fails callbacks, need to prevent adding the flow to the catalog
-      if (!response.getValue().getFailures().isEmpty()) {
-        for (Map.Entry<SpecCatalogListener, CallbackResult<AddSpecResponse>> entry: response.getValue().getFailures().entrySet()) {
-          flowSpec.getCompilationErrors().add(Throwables.getStackTraceAsString(entry.getValue().getError()));
-          responseMap.put(entry.getKey().getName(), new AddSpecResponse(entry.getValue().getResult()));
-        }
-      } else {
-        for (Map.Entry<SpecCatalogListener, CallbackResult<AddSpecResponse>> entry : response.getValue().getSuccesses().entrySet()) {
-          responseMap.put(entry.getKey().getName(), entry.getValue().getResult());
-        }
+      // If flow fails compilation, the result will have a non-empty string with the error
+      for (Map.Entry<SpecCatalogListener, CallbackResult<AddSpecResponse>> entry : response.getValue().getSuccesses().entrySet()) {
+        responseMap.put(entry.getKey().getName(), entry.getValue().getResult());
       }
     }
 
@@ -378,8 +373,9 @@ public class FlowCatalog extends AbstractIdleService implements SpecCatalog, Mut
   }
 
   public static boolean isCompileSuccessful(Map<String, AddSpecResponse> responseMap) {
+    // If we cannot get the response from the scheduler, assume that the flow failed compilation
     AddSpecResponse<String> addSpecResponse = responseMap.getOrDefault(
-        ServiceConfigKeys.GOBBLIN_SERVICE_JOB_SCHEDULER_LISTENER_CLASS, new AddSpecResponse<>(""));
+        ServiceConfigKeys.GOBBLIN_SERVICE_JOB_SCHEDULER_LISTENER_CLASS, new AddSpecResponse<>(null));
     return isCompileSuccessful(addSpecResponse.getValue());
   }
 
