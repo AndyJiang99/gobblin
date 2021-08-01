@@ -17,16 +17,13 @@
 
 package org.apache.gobblin.iceberg.writer;
 
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.io.Files;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
+
+import java.util.Map;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericData;
@@ -35,6 +32,28 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumWriter;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.gobblin.hive.metastore.HiveMetaStoreBasedRegister;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.serde.serdeConstants;
+import org.apache.iceberg.hive.HiveMetastoreTest;
+import org.apache.iceberg.hive.TestHiveMetastore;
+import org.apache.thrift.TException;
+import org.testng.Assert;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
+
+import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.io.Files;
+
 import org.apache.gobblin.configuration.State;
 import org.apache.gobblin.hive.HiveMetastoreClientPool;
 import org.apache.gobblin.hive.HivePartition;
@@ -57,24 +76,6 @@ import org.apache.gobblin.source.extractor.extract.kafka.KafkaStreamingExtractor
 import org.apache.gobblin.stream.RecordEnvelope;
 import org.apache.gobblin.util.ClustersNames;
 import org.apache.gobblin.util.ConfigUtils;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.metastore.IMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.Database;
-import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
-import org.apache.hadoop.hive.serde.serdeConstants;
-import org.apache.iceberg.FindFiles;
-import org.apache.iceberg.Table;
-import org.apache.iceberg.catalog.Namespace;
-import org.apache.iceberg.expressions.Expressions;
-import org.apache.iceberg.hive.HiveMetastoreTest;
-import org.apache.iceberg.hive.TestHiveMetastore;
-import org.apache.thrift.TException;
-import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
 
 
 public class HiveMetadataWriterTest extends HiveMetastoreTest {
@@ -92,6 +93,7 @@ public class HiveMetadataWriterTest extends HiveMetastoreTest {
       .endRecord();
   org.apache.avro.Schema _avroPartitionSchema;
   private String dbName = "hivedb";
+  private String dedupedDbName = "hivedb_deduped";
   private String tableName = "testTable";
 
   private GobblinMCEWriter gobblinMCEWriter;
@@ -128,6 +130,12 @@ public class HiveMetadataWriterTest extends HiveMetastoreTest {
       client.createDatabase(
           new Database(dbName, "database", tmpDir.getAbsolutePath() + "/metastore", Collections.emptyMap()));
     }
+    try {
+      client.getDatabase(dedupedDbName);
+    } catch (NoSuchObjectException e) {
+      client.createDatabase(
+          new Database(dedupedDbName, "dedupeddatabase", tmpDir.getAbsolutePath() + "/metastore_deduped", Collections.emptyMap()));
+    }
     hourlyDataFile_1 = new File(tmpDir, "data/tracking/testTable/hourly/2020/03/17/08/data.avro");
     Files.createParentDirs(hourlyDataFile_1);
     hourlyDataFile_2 = new File(tmpDir, "data/tracking/testTable/hourly/2020/03/17/09/data.avro");
@@ -139,6 +147,8 @@ public class HiveMetadataWriterTest extends HiveMetastoreTest {
     writeRecord(hourlyDataFile_1);
     writeRecord(hourlyDataFile_2);
     writeRecord(dailyDataFile);
+    Map<String, String> registrationState = new HashMap();
+    registrationState.put("hive.database.name", dbName);
     gmce = GobblinMetadataChangeEvent.newBuilder()
         .setDatasetIdentifier(DatasetIdentifier.newBuilder()
             .setDataOrigin(DataOrigin.EI)
@@ -158,7 +168,7 @@ public class HiveMetadataWriterTest extends HiveMetastoreTest {
         .setCluster(ClustersNames.getInstance().getClusterName())
         .setPartitionColumns(Lists.newArrayList("testpartition"))
         .setRegistrationPolicy(TestHiveRegistrationPolicy.class.getName())
-        .setRegistrationProperties(ImmutableMap.<String, String>builder().put("hive.database.name", dbName).build())
+        .setRegistrationProperties(registrationState)
         .build();
     state.setProp(KafkaSchemaRegistry.KAFKA_SCHEMA_REGISTRY_CLASS,
         KafkaStreamTestUtils.MockSchemaRegistry.class.getName());
@@ -208,6 +218,11 @@ public class HiveMetadataWriterTest extends HiveMetastoreTest {
   @Test(dependsOnMethods = {"testHiveWriteAddFileGMCE"})
   public void testHiveWriteRewriteFileGMCE() throws IOException {
     gmce.setTopicPartitionOffsetsRange(null);
+    Map<String, String> registrationState = gmce.getRegistrationProperties();
+    registrationState.put("additional.hive.database.names", dedupedDbName);
+    registrationState.put(HiveMetaStoreBasedRegister.SCHEMA_SOURCE_DB, dbName);
+    gmce.setRegistrationProperties(registrationState);
+    gmce.setSchemaSource(SchemaSource.NONE);
     FileSystem fs = FileSystem.get(new Configuration());
     String filePath = new Path(hourlyDataFile_1.getParentFile().getAbsolutePath()).toString();
     String filePath_1 = new Path(hourlyDataFile_2.getParentFile().getAbsolutePath()).toString();
@@ -227,7 +242,9 @@ public class HiveMetadataWriterTest extends HiveMetastoreTest {
 
     //Test hive writer re-write operation can de-register old partitions and register new one
     try {
-       Assert.assertTrue(client.getPartition("hivedb", "testTable",Lists.newArrayList("2020-03-17-00")) != null);
+      Assert.assertTrue(client.getPartition("hivedb", "testTable",Lists.newArrayList("2020-03-17-00")) != null);
+      // Test additional table been registered
+      Assert.assertTrue(client.tableExists(dedupedDbName, "testTable"));
     } catch (TException e) {
       throw new IOException(e);
     }
@@ -266,7 +283,7 @@ public class HiveMetadataWriterTest extends HiveMetastoreTest {
         partitionValue = "2020-03-17-00";
       }
       HivePartition partition = new HivePartition.Builder().withPartitionValues(Lists.newArrayList(partitionValue))
-          .withDbName("hivedb").withTableName("testTable").build();
+          .withDbName(table.getDbName()).withTableName(table.getTableName()).build();
       partition.setLocation(path.toString());
       return Optional.of(partition);
     }
@@ -279,9 +296,6 @@ public class HiveMetadataWriterTest extends HiveMetastoreTest {
         table.setLocation(tmpDir.getAbsolutePath());
       }
       return tables;
-    }
-    protected Iterable<String> getDatabaseNames(Path path) {
-      return Lists.newArrayList("hivedb");
     }
     protected List<String> getTableNames(Optional<String> dbPrefix, Path path) {
       return Lists.newArrayList("testTable");

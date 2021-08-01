@@ -30,6 +30,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.gobblin.configuration.ConfigurationKeys;
 import org.apache.gobblin.configuration.State;
+import org.apache.gobblin.hive.metastore.HiveMetaStoreBasedRegister;
 import org.apache.gobblin.hive.policy.HiveRegistrationPolicyBase;
 import org.apache.gobblin.iceberg.Utils.IcebergUtils;
 import org.apache.gobblin.iceberg.publisher.GobblinMCEPublisher;
@@ -51,6 +52,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.iceberg.Metrics;
 
+import static org.apache.gobblin.iceberg.writer.GobblinMCEWriter.HIVE_PARTITION_NAME;
+
 
 /**
  * A class running along with data ingestion pipeline for emitting GobblinMCE (Gobblin Metadata Change Event
@@ -63,8 +66,8 @@ import org.apache.iceberg.Metrics;
 public abstract class GobblinMCEProducer implements Closeable {
 
   public static final String GMCE_PRODUCER_CLASS = "GobblinMCEProducer.class.name";
+  public static final String GMCE_CLUSTER_NAME = "GobblinMCE.cluster.name";
   public static final String OLD_FILES_HIVE_REGISTRATION_KEY = "old.files.hive.registration.policy";
-  public static final String HIVE_PARTITION_NAME = "hive.partition.name";
   private static final String HDFS_PLATFORM_URN = "urn:li:dataPlatform:hdfs";
   private static final String DATASET_ORIGIN_KEY = "dataset.origin";
   private static final String DEFAULT_DATASET_ORIGIN = "PROD";
@@ -110,7 +113,7 @@ public abstract class GobblinMCEProducer implements Closeable {
         .setDataOrigin(DataOrigin.valueOf(origin))
         .setNativeName(state.getProp(ConfigurationKeys.DATA_PUBLISHER_DATASET_DIR))
         .build());
-    gmceBuilder.setCluster(ClustersNames.getInstance().getClusterName());
+    gmceBuilder.setCluster(state.getProp(GMCE_CLUSTER_NAME, ClustersNames.getInstance().getClusterName()));
     //retention job does not have job.id
     gmceBuilder.setFlowId(
         state.getProp(AbstractJob.JOB_ID, new Configuration().get(ConfigurationKeys.AZKABAN_FLOW_ID)));
@@ -146,6 +149,10 @@ public abstract class GobblinMCEProducer implements Closeable {
     if (state.contains(HiveRegistrationPolicyBase.ADDITIONAL_HIVE_TABLE_NAMES)) {
       regProperties.put(HiveRegistrationPolicyBase.ADDITIONAL_HIVE_TABLE_NAMES,
           state.getProp(HiveRegistrationPolicyBase.ADDITIONAL_HIVE_TABLE_NAMES));
+    }
+    if (state.contains(HiveMetaStoreBasedRegister.SCHEMA_SOURCE_DB)) {
+      regProperties.put(HiveMetaStoreBasedRegister.SCHEMA_SOURCE_DB,
+          state.getProp(HiveMetaStoreBasedRegister.SCHEMA_SOURCE_DB));
     }
     if (!regProperties.isEmpty()) {
       gmceBuilder.setRegistrationProperties(regProperties);

@@ -17,10 +17,10 @@
 
 package org.apache.gobblin.configuration;
 
-import com.google.common.base.Charsets;
-
 import java.nio.charset.Charset;
 import java.util.concurrent.TimeUnit;
+
+import com.google.common.base.Charsets;
 
 
 /**
@@ -252,6 +252,7 @@ public class ConfigurationKeys {
   public static final String TASK_ATTEMPT_ID_KEY = "task.AttemptId";
   public static final String JOB_CONFIG_FILE_PATH_KEY = "job.config.path";
   public static final String TASK_FAILURE_EXCEPTION_KEY = "task.failure.exception";
+  public static final String TASK_ISSUES_KEY = "task.issues";
   public static final String JOB_FAILURE_EXCEPTION_KEY = "job.failure.exception";
   public static final String TASK_RETRIES_KEY = "task.retries";
   public static final String TASK_IGNORE_CLOSE_FAILURES = "task.ignoreCloseFailures";
@@ -493,8 +494,12 @@ public class ConfigurationKeys {
   public static final String DATA_PUBLISHER_REPLACE_FINAL_DIR = DATA_PUBLISHER_PREFIX + ".replace.final.dir";
   public static final String DATA_PUBLISHER_FINAL_NAME = DATA_PUBLISHER_PREFIX + ".final.name";
   public static final String DATA_PUBLISHER_OVERWRITE_ENABLED = DATA_PUBLISHER_PREFIX + ".overwrite.enabled";
-  // This property is used to specify the owner group of the data publisher final output directory
+  // @DATA_PUBLISHER_FINAL_DIR is the final publishing root directory
+  // @DATA_PUBLISHER_FINAL_DIR_GROUP is set at the leaf level (DATA_PUBLISHER_FINAL_DIR/EXTRACT/file.xxx) which is incorrect
+  // Use @DATA_PUBLISHER_OUTPUT_DIR_GROUP to set group at output dir level @DATA_PUBLISHER_FINAL_DIR/EXTRACT
+  @Deprecated
   public static final String DATA_PUBLISHER_FINAL_DIR_GROUP = DATA_PUBLISHER_PREFIX + ".final.dir.group";
+  public static final String DATA_PUBLISHER_OUTPUT_DIR_GROUP = DATA_PUBLISHER_PREFIX + ".output.dir.group";
   public static final String DATA_PUBLISHER_PERMISSIONS = DATA_PUBLISHER_PREFIX + ".permissions";
   public static final String PUBLISH_DATA_AT_JOB_LEVEL = "publish.data.at.job.level";
   public static final boolean DEFAULT_PUBLISH_DATA_AT_JOB_LEVEL = true;
@@ -945,6 +950,7 @@ public class ConfigurationKeys {
   public static final String AZKABAN_JOB_URL = "azkaban.link.job.url";
   public static final String AZKABAN_JOB_EXEC_URL = "azkaban.link.jobexec.url";
   public static final String AZKABAN_WEBSERVERHOST = "azkaban.webserverhost";
+  public static final String AZKABAN_SERVER_NAME = "azkaban.server.name";
 
   /**
    * Hive registration properties
@@ -968,6 +974,9 @@ public class ConfigurationKeys {
   public static final Charset DEFAULT_CHARSET_ENCODING = Charsets.UTF_8;
   public static final String TEST_HARNESS_LAUNCHER_IMPL = "gobblin.testharness.launcher.impl";
   public static final int PERMISSION_PARSING_RADIX = 8;
+  // describes a comma separated list of non transient errors that may come in a gobblin job
+  // e.g. "invalid_grant,CredentialStoreException"
+  public static final String GOBBLIN_NON_TRANSIENT_ERRORS = "gobblin.errorMessages.nonTransientErrors";
 
   /**
    * Configuration properties related to Flows
@@ -1074,7 +1083,31 @@ public class ConfigurationKeys {
   public static final String USE_DATASET_LOCAL_WORK_DIR = "gobblin.useDatasetLocalWorkDir";
   public static final String DESTINATION_DATASET_HANDLER_CLASS = "gobblin.destination.datasetHandlerClass";
   public static final String DATASET_DESTINATION_PATH = "gobblin.dataset.destination.path";
-  public static final String STAGING_DIR_DEFAULT_SUFFIX = "/.temp/taskStaging";
-  public static final String OUTPUT_DIR_DEFAULT_SUFFIX = "/.temp/taskOutput";
+  public static final String TMP_DIR = ".temp";
+  public static final String STAGING_DIR_DEFAULT_SUFFIX = "/" + TMP_DIR + "/taskStaging";
+  public static final String OUTPUT_DIR_DEFAULT_SUFFIX = "/" + TMP_DIR + "/taskOutput";
   public static final String ROW_LEVEL_ERR_FILE_DEFAULT_SUFFIX = "/err";
+
+
+  /**
+   * Troubleshooter configuration
+   */
+
+  /**
+   * Disables all troubleshooter functions
+   * */
+  public static final String TROUBLESHOOTER_DISABLED = "gobblin.troubleshooter.disabled";
+
+  /**
+   * Disables reporting troubleshooter issues as GobblinTrackingEvents
+   * */
+  public static final String TROUBLESHOOTER_DISABLE_EVENT_REPORTING = "gobblin.troubleshooter.disableEventReporting";
+
+  /**
+   * The maximum number of issues that In-memory troubleshooter repository will keep.
+   *
+   * This setting can control memory usage of the troubleshooter.
+   * */
+  public static final String TROUBLESHOOTER_IN_MEMORY_ISSUE_REPOSITORY_MAX_SIZE = "gobblin.troubleshooter.inMemoryIssueRepository.maxSize";
+  public static final int DEFAULT_TROUBLESHOOTER_IN_MEMORY_ISSUE_REPOSITORY_MAX_SIZE = 100;
 }
