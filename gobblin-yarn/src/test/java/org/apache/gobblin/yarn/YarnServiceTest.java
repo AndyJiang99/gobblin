@@ -164,7 +164,7 @@ public class YarnServiceTest {
     MockitoAnnotations.initMocks(this);
 
     PowerMockito.mockStatic(AMRMClientAsync.class);
-    when(AMRMClientAsync.createAMRMClientAsync(any(Integer.class), any(AMRMClientAsync.CallbackHandler.class)))
+    when(AMRMClientAsync.createAMRMClientAsync(any(), any(AMRMClientAsync.CallbackHandler.class)))
         .thenReturn(mockAMRMClient);
 
     System.out.println("HERE");
