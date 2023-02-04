@@ -17,6 +17,12 @@
 
 package org.apache.gobblin.yarn;
 
+import com.google.common.base.Predicate;
+import com.google.common.eventbus.EventBus;
+import com.google.common.io.Closer;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigValueFactory;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.URL;
@@ -29,7 +35,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
-
+import org.apache.gobblin.cluster.GobblinClusterConfigurationKeys;
+import org.apache.gobblin.testing.AssertWithBackoff;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -46,7 +53,6 @@ import org.apache.hadoop.yarn.api.records.ResourceRequest;
 import org.apache.hadoop.yarn.api.records.YarnApplicationState;
 import org.apache.hadoop.yarn.client.api.AMRMClient;
 import org.apache.hadoop.yarn.client.api.YarnClient;
-import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.server.MiniYARNCluster;
@@ -56,12 +62,7 @@ import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixManager;
 import org.apache.helix.PropertyKey;
-import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
@@ -69,28 +70,13 @@ import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
-import com.google.common.base.Predicate;
-import com.google.common.eventbus.EventBus;
-import com.google.common.io.Closer;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigValueFactory;
-
-import org.apache.gobblin.cluster.GobblinClusterConfigurationKeys;
-import org.apache.gobblin.testing.AssertWithBackoff;
-
-import static org.mockito.Matchers.*;
-import static org.powermock.api.mockito.PowerMockito.*;
-
 
 /**
  * Tests for {@link YarnService}.
  */
 @Test(groups = {"gobblin.yarn", "disabledOnCI"}, singleThreaded=true)
-@PrepareForTest({AMRMClientAsync.CallbackHandler.class})
-@PowerMockIgnore("javax.management.*")
-public class YarnServiceTest {
-  final Logger LOG = LoggerFactory.getLogger(YarnServiceTest.class);
+public class YarnServiceIT {
+  final Logger LOG = LoggerFactory.getLogger(YarnServiceIT.class);
 
   private YarnClient yarnClient;
   private MiniYARNCluster yarnCluster;
@@ -102,9 +88,6 @@ public class YarnServiceTest {
   private final EventBus eventBus = new EventBus("YarnServiceTest");
 
   private final Closer closer = Closer.create();
-
-  @Mock
-  AMRMClientAsync mockAMRMClient;
 
   private static void setEnv(String key, String value) {
     try {
@@ -148,8 +131,8 @@ public class YarnServiceTest {
     this.yarnClient.init(this.clusterConf);
     this.yarnClient.start();
 
-    URL url = YarnServiceTest.class.getClassLoader()
-        .getResource(YarnServiceTest.class.getSimpleName() + ".conf");
+    URL url = YarnServiceIT.class.getClassLoader()
+        .getResource(YarnServiceIT.class.getSimpleName() + ".conf");
     Assert.assertNotNull(url, "Could not find resource " + url);
 
     this.config = ConfigFactory.parseURL(url).resolve();
@@ -161,13 +144,6 @@ public class YarnServiceTest {
     this.yarnService = new TestYarnService(this.config, "testApp", "appId",
         this.clusterConf,
         FileSystem.getLocal(new Configuration()), this.eventBus);
-    MockitoAnnotations.initMocks(this);
-
-    PowerMockito.mockStatic(AMRMClientAsync.class);
-    when(AMRMClientAsync.createAMRMClientAsync(any(Integer.class), any(AMRMClientAsync.CallbackHandler.class)))
-        .thenReturn(mockAMRMClient);
-
-    System.out.println("HERE");
 
     this.yarnService.startUp();
   }
@@ -310,13 +286,6 @@ public class YarnServiceTest {
     // 1628 is from 2048 * 0.8 - 10
     Assert.assertTrue(command.contains("-Xmx1628"));
   }
-
-//  @Test(groups = {"gobblin.yarn", "disabledOnCI"})
-//  public void testYarnServiceThreadSafe() throws Exception {
-//    System.out.println(this.yarnService.startupInProgress);
-//
-//    Assert.fail();
-//  }
 
   /**
    * Test if requested resource exceed the resource limit, yarnService should fail.
