@@ -633,7 +633,7 @@ public class YarnService extends AbstractIdleService {
   }
 
 
-  private ByteBuffer getSecurityTokens() throws IOException {
+  protected ByteBuffer getSecurityTokens() throws IOException {
     Credentials credentials = UserGroupInformation.getCurrentUser().getCredentials();
     Closer closer = Closer.create();
     try {
