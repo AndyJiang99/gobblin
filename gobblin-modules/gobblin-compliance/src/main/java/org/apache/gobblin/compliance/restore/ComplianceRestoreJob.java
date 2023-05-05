@@ -59,6 +59,7 @@ public class ComplianceRestoreJob extends ComplianceJob {
     super(properties);
     initDatasetFinder(properties);
     try {
+      log.info("Compliance Restore Job");
       ProxyUtils.cancelTokens(new State(properties));
     } catch (InterruptedException | TException | IOException e) {
       Throwables.propagate(e);

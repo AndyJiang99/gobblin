@@ -78,6 +78,7 @@ public class ComplianceRetentionJob extends ComplianceJob {
       this.pool = HiveMetastoreClientPool
           .get(properties, Optional.fromNullable(properties.getProperty(HiveDatasetFinder.HIVE_METASTORE_URI_KEY)));
       initDatasetFinder(properties);
+      log.info("Compliance Retention Job");
       ProxyUtils.cancelTokens(new State(properties));
     } catch (InterruptedException | TException | IOException e) {
       Throwables.propagate(e);

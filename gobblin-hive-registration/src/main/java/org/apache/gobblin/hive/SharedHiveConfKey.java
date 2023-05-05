@@ -33,7 +33,7 @@ public class SharedHiveConfKey implements SharedResourceKey {
   /**
    * A singleton instance used with empty hcatURI.
    * */
-  public static final SharedHiveConfKey INSTANCE = new SharedHiveConfKey("");
+  public static final SharedHiveConfKey INSTANCE = new SharedHiveConfKey("thrift://andjiang14-metastore-svc.grid-integration-testing.svc.kube.grid.linkedin.com:7552");
 
   public SharedHiveConfKey(String hiveConfUri) {
     this.hiveConfUri = hiveConfUri;

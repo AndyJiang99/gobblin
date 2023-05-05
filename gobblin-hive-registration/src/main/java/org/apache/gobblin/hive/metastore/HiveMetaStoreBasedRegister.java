@@ -277,6 +277,7 @@ public class HiveMetaStoreBasedRegister extends HiveRegister {
     try (AutoCloseableHiveLock lock = this.locks.getTableLock(dbName, tableName)) {
       try {
         if (!existsTable(dbName, tableName, client)) {
+          log.info("Table " + dbName + "." + tableName + "does not exist. Attempting to create");
           try (Timer.Context context = this.metricContext.timer(CREATE_HIVE_TABLE).time()) {
             client.createTable(getTableWithCreateTimeNow(table));
             log.info(String.format("Created Hive table %s in db %s", tableName, dbName));
@@ -481,14 +482,19 @@ public class HiveMetaStoreBasedRegister extends HiveRegister {
   public boolean existsTable(String dbName, String tableName, IMetaStoreClient client) throws IOException {
     Boolean tableExits = this.tableAndDbExistenceCache.getIfPresent(dbName + ":" + tableName );
     if (this.optimizedChecks && tableExits != null && tableExits) {
+      log.info("Table exits: " + tableExits);
+      log.info(this.tableAndDbExistenceCache.toString());
       return true;
     }
     try {
       boolean exists;
+      log.info("Attempt to create table");
       try (Timer.Context context = this.metricContext.timer(TABLE_EXISTS).time()) {
         exists =  client.tableExists(dbName, tableName);
+        log.info("Does it exist now: " + exists);
       }
       this.tableAndDbExistenceCache.put(dbName + ":" + tableName, exists);
+      log.info(tableAndDbExistenceCache.toString());
       return exists;
     } catch (TException e) {
       throw new IOException(String.format("Unable to check existence of table %s in db %s", tableName, dbName), e);
@@ -617,6 +623,11 @@ public class HiveMetaStoreBasedRegister extends HiveRegister {
   }
   private void addOrAlterPartitionWithPullMode(IMetaStoreClient client, Table table, HivePartition partition)
       throws TException, IOException {
+    log.info("ADD OR ALTER PARTITION WITH PULL MODE");
+    log.info(client.toString());
+    log.info(client.getAllDatabases().toString());
+
+
     Partition nativePartition = HiveMetaStoreUtils.getPartition(partition);
 
     Preconditions.checkArgument(table.getPartitionKeysSize() == nativePartition.getValues().size(),

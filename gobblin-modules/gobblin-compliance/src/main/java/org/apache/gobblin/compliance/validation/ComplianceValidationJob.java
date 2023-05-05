@@ -58,6 +58,7 @@ public class ComplianceValidationJob extends ComplianceJob {
     super(properties);
     initDatasetFinder(properties);
     try {
+      log.info("Compliance Validation Job");
       ProxyUtils.cancelTokens(new State(properties));
     } catch (IOException | TException | InterruptedException e) {
       Throwables.propagate(e);

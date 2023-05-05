@@ -64,6 +64,8 @@ public class HiveMetaStoreClientFactory extends BasePooledObjectFactory<IMetaSto
 
   private static HiveConf getHiveConf(Optional<String> hcatURI) {
     try {
+      LOG.info("HCAT URI");
+      LOG.info(hcatURI.toString());
       return HiveConfFactory.get(hcatURI, SharedResourcesBrokerFactory.getImplicitBroker());
     } catch (IOException nce) {
       throw new RuntimeException("Implicit broker is not correctly configured, failed to fetch a HiveConf object", nce);
@@ -72,6 +74,11 @@ public class HiveMetaStoreClientFactory extends BasePooledObjectFactory<IMetaSto
 
   public HiveMetaStoreClientFactory(HiveConf hiveConf) {
     this.hiveConf = hiveConf;
+    LOG.info("HiveMetaStoreClientFactory");
+    LOG.info(hiveConf.toString());
+    if (hiveConf.getMetastoreSiteLocation() != null) {
+      LOG.info(hiveConf.getMetastoreSiteLocation().getPath());
+    }
   }
 
   public HiveMetaStoreClientFactory() {
@@ -79,6 +86,7 @@ public class HiveMetaStoreClientFactory extends BasePooledObjectFactory<IMetaSto
   }
 
   private IMetaStoreClient createMetaStoreClient() throws MetaException {
+    LOG.info("HiveMetaStoreClientFactory Create");
     HiveMetaHookLoader hookLoader = new HiveMetaHookLoader() {
       @Override
       public HiveMetaHook getHook(Table tbl) throws MetaException {
@@ -87,6 +95,10 @@ public class HiveMetaStoreClientFactory extends BasePooledObjectFactory<IMetaSto
         }
 
         try {
+          LOG.info(tbl.getDbName() + "." + tbl.getTableName());
+          LOG.info(tbl.toString());
+          LOG.info(tbl.getParameters().get(META_TABLE_STORAGE));
+          LOG.info(hiveConf.toString());
           HiveStorageHandler storageHandler =
               HiveUtils.getStorageHandler(hiveConf, tbl.getParameters().get(META_TABLE_STORAGE));
           return storageHandler == null ? null : storageHandler.getMetaHook();
@@ -96,6 +108,13 @@ public class HiveMetaStoreClientFactory extends BasePooledObjectFactory<IMetaSto
         }
       }
     };
+
+    LOG.info("Need retry...");
+    LOG.info(hiveConf.toString());
+    LOG.info(getHiveConf().getJar());
+    LOG.info(getHiveConf().getAllProperties().toString());
+    LOG.info(String.valueOf(hiveConf.getHiveDefaultLocation()));
+//    LOG.info(hiveConf.)
 
     return RetryingMetaStoreClient.getProxy(hiveConf, hookLoader, HiveMetaStoreClient.class.getName());
   }

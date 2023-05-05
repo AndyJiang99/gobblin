@@ -236,6 +236,8 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
     CheckpointableWatermark watermark = recordEnvelope.getWatermark();
     Preconditions.checkNotNull(watermark);
     //filter out the events that not emitted by accepted clusters
+    log.info(acceptedClusters.toString());
+    log.info(genericRecord.get("cluster").toString());
     if (!acceptedClusters.contains(genericRecord.get("cluster"))) {
       return;
     }
@@ -243,6 +245,9 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
     GobblinMetadataChangeEvent gmce =
         (GobblinMetadataChangeEvent) SpecificData.get().deepCopy(genericRecord.getSchema(), genericRecord);
     String datasetName = gmce.getDatasetIdentifier().toString();
+    log.info(gmce.getNewFiles().toString());
+    log.info("GMCE operation type: " + gmce.getOperationType());
+    log.info("datasetName: " + datasetName);
     //remove the old hive spec cache after flush
     //Here we assume that new hive spec for one path always be the same(ingestion flow register to same tables)
     oldSpecsMaps.remove(datasetName);
@@ -253,6 +258,7 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
     ConcurrentHashMap<String, Collection<HiveSpec>> oldSpecsMap = new ConcurrentHashMap<>();
 
     if (gmce.getNewFiles() != null) {
+      log.info("Get new files.");
       State registerState = setHiveRegProperties(state, gmce, true);
       computeSpecMap(Lists.newArrayList(Iterables.transform(gmce.getNewFiles(), DataFile::getFilePath)),
           newSpecsMap, newSpecsMaps.computeIfAbsent(datasetName, t -> CacheBuilder.newBuilder()
@@ -261,6 +267,7 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
               .build()), registerState, false);
     }
     if (gmce.getOldFilePrefixes() != null) {
+      log.info("Get old file prefixes.");
       State registerState = setHiveRegProperties(state, gmce, false);
       computeSpecMap(gmce.getOldFilePrefixes(), oldSpecsMap, oldSpecsMaps.computeIfAbsent(datasetName, t -> CacheBuilder
           .newBuilder()
@@ -268,6 +275,7 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
               MetadataWriter.DEFAULT_CACHE_EXPIRING_TIME), TimeUnit.HOURS)
           .build()), registerState, true);
     } else if (gmce.getOldFiles() != null) {
+      log.info("Get old files.");
       State registerState = setHiveRegProperties(state, gmce, false);
       computeSpecMap(gmce.getOldFiles(), oldSpecsMap, oldSpecsMaps.computeIfAbsent(datasetName,
           t -> CacheBuilder.newBuilder()
@@ -275,7 +283,20 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
                   MetadataWriter.DEFAULT_CACHE_EXPIRING_TIME), TimeUnit.HOURS)
               .build()), registerState, false);
     }
+    log.info("New spec map: ");
+    if (!newSpecsMap.isEmpty()) {
+      newSpecsMap.forEach((k,v) -> v.forEach(item -> log.info("Path: " + item.getPath() +
+          ". Partition: " + item.getPartition().toString() + ". Table: " + item.getTable().getTableName() + ". Database: "
+          + item.getTable().getDbName())));
+    }
+    log.info("Old spec map: ");
+    if (!oldSpecsMap.isEmpty()) {
+      oldSpecsMap.forEach((k,v) -> v.forEach(item -> log.info("Path: " + item.getPath() +
+          ". Partition: " + item.getPartition().toString() + ". Table: " + item.getTable().getTableName() + ". Database: "
+          + item.getTable().getDbName())));
+    }
     if (newSpecsMap.isEmpty() && oldSpecsMap.isEmpty()) {
+      log.info("Empty new and old spec map.");
       return;
     }
 
@@ -290,7 +311,10 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
       String dbName = spec.getTable().getDbName();
       String tableName = spec.getTable().getTableName();
       String tableString = Joiner.on(TABLE_NAME_DELIMITER).join(dbName, tableName);
+      log.info("TableString: " + tableString);
       partitionKeysMap.put(tableString, spec.getTable().getPartitionKeys());
+      tableOperationTypeMap.forEach((key, value) -> log.info("Key: " + key + ", value: " + value + ", operation: " + value.operationType));
+
       if (!tableOperationTypeMap.containsKey(tableString)) {
         tableOperationTypeMap.put(tableString, new TableStatus(gmce.getOperationType(),
             gmce.getDatasetIdentifier().getNativeName(), watermark.getSource(),
@@ -301,11 +325,14 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
             gmce.getDatasetIdentifier().getNativeName(), watermark.getSource(),
             ((LongWatermark)watermark.getWatermark()).getValue()-1, ((LongWatermark)watermark.getWatermark()).getValue()));
       }
+      log.info("Done checking for operation type map");
       tableOperationTypeMap.get(tableString).gmceHighWatermark = ((LongWatermark)watermark.getWatermark()).getValue();
 
       List<MetadataWriter> allowedWriters = getAllowedMetadataWriters(gmce, metadataWriters);
+      log.info("Write with metadata writers.");
       writeWithMetadataWriters(recordEnvelope, allowedWriters, newSpecsMap, oldSpecsMap, spec);
     }
+    log.info("Increment record count");
     this.recordCount.incrementAndGet();
   }
 

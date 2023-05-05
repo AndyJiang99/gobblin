@@ -112,6 +112,7 @@ public class HivePurgerSource implements Source {
     }
     // cancel tokens
     try {
+      log.info("Hive Purger Source");
       ProxyUtils.cancelTokens(new State(state));
     } catch (InterruptedException | TException e) {
       throw new IOException(e);

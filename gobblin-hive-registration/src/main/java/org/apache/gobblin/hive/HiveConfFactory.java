@@ -33,6 +33,8 @@ import org.apache.gobblin.broker.iface.ScopedConfigView;
 import org.apache.gobblin.broker.iface.SharedResourceFactory;
 import org.apache.gobblin.broker.iface.SharedResourceFactoryResponse;
 import org.apache.gobblin.broker.iface.SharedResourcesBroker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.gobblin.hive.HiveMetaStoreClientFactory.HIVE_METASTORE_TOKEN_SIGNATURE;
 
@@ -43,6 +45,8 @@ import static org.apache.gobblin.hive.HiveMetaStoreClientFactory.HIVE_METASTORE_
  */
 public class HiveConfFactory<S extends ScopeType<S>> implements SharedResourceFactory<HiveConf, SharedHiveConfKey, S> {
   static final String FACTORY_NAME = "hiveConfFactory";
+  private static final Logger LOG = LoggerFactory.getLogger(HiveMetaStoreClientFactory.class);
+
 
   @Override
   public String getName() {
@@ -77,6 +81,11 @@ public class HiveConfFactory<S extends ScopeType<S>> implements SharedResourceFa
       SharedHiveConfKey confKey =
           hcatURI.isPresent() && StringUtils.isNotBlank(hcatURI.get()) ? new SharedHiveConfKey(hcatURI.get())
               : SharedHiveConfKey.INSTANCE;
+      LOG.info("GET IN HIVECONFFACTORY");
+      LOG.info(confKey.toString());
+      LOG.info("HCAT URI PRESENT: " + hcatURI.isPresent());
+      LOG.info("HCAT CONF KEY: " + confKey.hiveConfUri);
+
       return broker.getSharedResource(new HiveConfFactory<>(), confKey);
     } catch (NotConfiguredException nce) {
       throw new IOException(nce);

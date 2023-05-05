@@ -77,6 +77,9 @@ public class ProxyUtils {
     String keytabLocation = state.getProp(ConfigurationKeys.SUPER_USER_KEY_TAB_LOCATION);
     String realm = state.getProp(ConfigurationKeys.KERBEROS_REALM);
 
+    log.info("CANCELLING TOKEN");
+    log.info(realm);
+
     UserGroupInformation.loginUserFromKeytab(HostUtils.getPrincipalUsingHostname(superUser, realm), keytabLocation);
     UserGroupInformation currentUser = UserGroupInformation.getCurrentUser();
     UserGroupInformation realUser = currentUser.getRealUser();
