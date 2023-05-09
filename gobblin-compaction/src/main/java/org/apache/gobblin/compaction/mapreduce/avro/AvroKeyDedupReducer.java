@@ -19,11 +19,18 @@ package org.apache.gobblin.compaction.mapreduce.avro;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
+import java.util.List;
+import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
+import java.io.IOException;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
 import org.apache.avro.mapred.AvroValue;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
+import org.apache.gobblin.util.AvroUtils;
 import org.apache.gobblin.util.reflection.GobblinConstructorUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
@@ -36,6 +43,7 @@ import org.apache.hadoop.io.NullWritable;
  *
  * @author Ziyang Liu
  */
+@Slf4j
 public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<GenericRecord>, AvroValue<GenericRecord>,
     AvroKey<GenericRecord>, NullWritable> {
 
@@ -69,6 +77,55 @@ public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<Gener
     }
   }
 
+  @Override
+  protected void reduce(AvroKey<GenericRecord> key, Iterable<AvroValue<GenericRecord>> values, Context context)
+      throws IOException, InterruptedException {
+    int numVals = 0;
+    boolean firstSeen = false;
+
+    AvroValue<GenericRecord> valueToRetain = null;
+    Set<Integer> ETL_SCNS = new HashSet<>();
+    Map<Integer, List<GenericRecord>> allRecords;
+
+    // Preserve only one values among all duplicates.
+    for (AvroValue<GenericRecord> value : values) {
+      if (valueToRetain == null) {
+        valueToRetain = value;
+      } else if (deltaComparatorOptional.isPresent()) {
+        valueToRetain = deltaComparatorOptional.get().compare(valueToRetain, value) >= 0 ? valueToRetain : value;
+      }
+      GenericRecord record = value.datum();
+      try {
+        if (!firstSeen) {
+          log.info(record.getSchema().toString());
+          log.info(record.get("ETL_SCN").toString());
+          Integer ETL_SCN = (Integer) record.get("ETL_SCN");
+          firstSeen = true;
+        }
+      } catch (Exception e) {
+        log.info(e.getMessage());
+      }
+      numVals++;
+    }
+
+    writeRetainedValue(valueToRetain, context);
+    updateCounters(numVals, context);
+  }
+
+
+//  protected void printSCN() {
+//    // Get the ETL_SCN value
+//    Integer ETL_SCN = 0;
+//    long ETL_GG_MODI_MICROS = 0;
+//
+//    if (!ETL_SCNS.contains(ETL_SCN)) {
+//      ETL_SCNS.add(ETL_SCN);
+//    }
+//    else {
+//      AvroUtils
+//      log.error("Duplicate record of ETL_SCN: " + ETL_SCN + ". ETL_GG_MODI_MICROS: " + ETL_GG_MODI_MICROS + ". Record details: " + value);
+//    }
+//  }
 
   @VisibleForTesting
   protected static class AvroValueDeltaSchemaComparator implements Comparator<AvroValue<GenericRecord>> {
