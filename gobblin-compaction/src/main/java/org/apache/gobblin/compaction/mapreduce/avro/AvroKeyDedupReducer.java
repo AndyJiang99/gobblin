@@ -91,7 +91,6 @@ public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<Gener
 
     // Preserve only one values among all duplicates.
     for (AvroValue<GenericRecord> value : values) {
-      temp.clear();
       if (valueToRetain == null) {
         valueToRetain = value;
       } else if (deltaComparatorOptional.isPresent()) {
