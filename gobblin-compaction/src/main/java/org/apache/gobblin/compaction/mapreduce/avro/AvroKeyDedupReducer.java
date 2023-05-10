@@ -20,19 +20,14 @@ package org.apache.gobblin.compaction.mapreduce.avro;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
 import org.apache.avro.mapred.AvroValue;
 import org.apache.gobblin.compaction.mapreduce.RecordKeyDedupReducerBase;
-import org.apache.gobblin.util.AvroUtils;
 import org.apache.gobblin.util.reflection.GobblinConstructorUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
@@ -83,11 +78,10 @@ public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<Gener
   protected void reduce(AvroKey<GenericRecord> key, Iterable<AvroValue<GenericRecord>> values, Context context)
       throws IOException, InterruptedException {
     int numVals = 0;
-    boolean firstSeen = false;
+    boolean firstSeen = true;
 
     AvroValue<GenericRecord> valueToRetain = null;
-    Map<Integer, List<GenericRecord>> allRecords = new HashMap<>();
-    List<GenericRecord> temp = new ArrayList<>();
+    List<GenericRecord> allValues = new ArrayList<>();
 
     // Preserve only one values among all duplicates.
     for (AvroValue<GenericRecord> value : values) {
@@ -98,16 +92,12 @@ public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<Gener
       }
       GenericRecord record = value.datum();
       try {
-        if (!firstSeen) {
+        if (firstSeen) {
           log.info(record.getSchema().toString());
           log.info(record.get("ETL_SCN").toString());
-          Integer ETL_SCN = (Integer) record.get("ETL_SCN");
-          if (!allRecords.containsKey(ETL_SCN)) {
-            temp.add(record);
-          }
-          allRecords.put(ETL_SCN, temp);
-          firstSeen = true;
+          firstSeen = false;
         }
+        allValues.add(record);
       } catch (Exception e) {
         log.info(e.getMessage());
       }
@@ -116,16 +106,14 @@ public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<Gener
 
     writeRetainedValue(valueToRetain, context);
     updateCounters(numVals, context);
-    printSCN(allRecords);
+    printDuplicateSCNRecords(allValues);
   }
 
-  protected void printSCN(Map<Integer, List<GenericRecord>> allRecords) {
-    for (Map.Entry<Integer, List<GenericRecord>> records : allRecords.entrySet()) {
-      if (records.getValue().size() >= 1) {
-        log.info("For ETL_SCN of: " + records.getKey() + ", there exists " + records.getValue().size() + " duplicates.");
-        for (GenericRecord record : records.getValue()) {
-          log.info(record.toString());
-        }
+  private void printDuplicateSCNRecords(List<GenericRecord> allRecords) {
+    if (allRecords.size() > 1) {
+      log.info("For ETL_SCN of: " + allRecords.get(0).get("ETL_SCN") + ", there exists " + allRecords.size() + " duplicates.");
+      for (GenericRecord record : allRecords) {
+        log.info(record.toString());
       }
     }
   }
