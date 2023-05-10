@@ -19,6 +19,8 @@ package org.apache.gobblin.compaction.mapreduce.avro;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -84,11 +86,12 @@ public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<Gener
     boolean firstSeen = false;
 
     AvroValue<GenericRecord> valueToRetain = null;
-    Set<Integer> ETL_SCNS = new HashSet<>();
-    Map<Integer, List<GenericRecord>> allRecords;
+    Map<Integer, List<GenericRecord>> allRecords = new HashMap<>();
+    List<GenericRecord> temp = new ArrayList<>();
 
     // Preserve only one values among all duplicates.
     for (AvroValue<GenericRecord> value : values) {
+      temp.clear();
       if (valueToRetain == null) {
         valueToRetain = value;
       } else if (deltaComparatorOptional.isPresent()) {
@@ -100,6 +103,10 @@ public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<Gener
           log.info(record.getSchema().toString());
           log.info(record.get("ETL_SCN").toString());
           Integer ETL_SCN = (Integer) record.get("ETL_SCN");
+          if (!allRecords.containsKey(ETL_SCN)) {
+            temp.add(record);
+          }
+          allRecords.put(ETL_SCN, temp);
           firstSeen = true;
         }
       } catch (Exception e) {
@@ -110,22 +117,19 @@ public class AvroKeyDedupReducer extends RecordKeyDedupReducerBase<AvroKey<Gener
 
     writeRetainedValue(valueToRetain, context);
     updateCounters(numVals, context);
+    printSCN(allRecords);
   }
 
-
-//  protected void printSCN() {
-//    // Get the ETL_SCN value
-//    Integer ETL_SCN = 0;
-//    long ETL_GG_MODI_MICROS = 0;
-//
-//    if (!ETL_SCNS.contains(ETL_SCN)) {
-//      ETL_SCNS.add(ETL_SCN);
-//    }
-//    else {
-//      AvroUtils
-//      log.error("Duplicate record of ETL_SCN: " + ETL_SCN + ". ETL_GG_MODI_MICROS: " + ETL_GG_MODI_MICROS + ". Record details: " + value);
-//    }
-//  }
+  protected void printSCN(Map<Integer, List<GenericRecord>> allRecords) {
+    for (Map.Entry<Integer, List<GenericRecord>> records : allRecords.entrySet()) {
+      if (records.getValue().size() >= 1) {
+        log.info("For ETL_SCN of: " + records.getKey() + ", there exists " + records.getValue().size() + " duplicates.");
+        for (GenericRecord record : records.getValue()) {
+          log.info(record.toString());
+        }
+      }
+    }
+  }
 
   @VisibleForTesting
   protected static class AvroValueDeltaSchemaComparator implements Comparator<AvroValue<GenericRecord>> {
