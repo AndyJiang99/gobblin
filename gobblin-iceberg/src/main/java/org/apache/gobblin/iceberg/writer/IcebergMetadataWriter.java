@@ -48,6 +48,7 @@ import java.util.stream.Stream;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificData;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.gobblin.completeness.audit.AuditCountClientFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -203,6 +204,8 @@ public class IcebergMetadataWriter implements MetadataWriter {
 
   public IcebergMetadataWriter(State state) throws IOException {
     this.state = state;
+    state.setProp(AuditCountClientFactory.AUDIT_COUNT_CLIENT_FACTORY,
+        "org.apache.gobblin.completeness.audit.AuditCountHttpClientFactory");
     this.schemaRegistry = KafkaSchemaRegistry.get(state.getProperties());
     conf = HadoopUtils.getConfFromState(state);
     initializeCatalog();
@@ -263,8 +266,12 @@ public class IcebergMetadataWriter implements MetadataWriter {
   }
 
   private org.apache.iceberg.Table getIcebergTable(TableIdentifier tid) throws NoSuchTableException {
+//    throw new NoSuchTableException("test");
+    catalog = CatalogUtil.loadCatalog(HiveCatalog.class.getName(), "HiveCatalog", new HashMap<>(), conf);
     TableMetadata tableMetadata = tableMetadataMap.computeIfAbsent(tid, t -> new TableMetadata(this.conf));
     if (!tableMetadata.table.isPresent()) {
+      System.out.println("TID");
+      System.out.println(tid);
       tableMetadata.table = Optional.of(catalog.loadTable(tid));
     }
     return tableMetadata.table.get();
@@ -322,6 +329,9 @@ public class IcebergMetadataWriter implements MetadataWriter {
         }
         table = createTable(gmce, tableSpec);
         tableMetadata.table = Optional.of(table);
+        System.out.println("TABLE");
+        System.out.println(table.toString());
+        System.out.println(table.location());
       } catch (Exception e1) {
         log.error("skip processing {} for table {}.{} due to error when creating table", gmce.toString(),
             tableSpec.getTable().getDbName(), tableSpec.getTable().getTableName());
@@ -538,6 +548,7 @@ public class IcebergMetadataWriter implements MetadataWriter {
       WriterUtils.mkdirsWithRecursivePermission(tablePath.getFileSystem(conf), tablePath, permission);
     }
     try (Timer.Context context = metricContext.timer(CREATE_TABLE_TIME).time()) {
+      catalog = CatalogUtil.loadCatalog(HiveCatalog.class.getName(), "HiveCatalog", new HashMap<>(), conf);
       icebergTable =
           catalog.createTable(tid, tableSchema, partitionSpec, tableLocation, IcebergUtils.getTableProperties(table));
       // We should set the avro schema literal when creating the table.
@@ -673,6 +684,7 @@ public class IcebergMetadataWriter implements MetadataWriter {
   private Stream<DataFile> getIcebergDataFilesToBeAddedHelper(GobblinMetadataChangeEvent gmce, Table table,
       Map<String, Collection<HiveSpec>> newSpecsMap,
       TableMetadata tableMetadata) {
+    System.out.println("GET ICEBERG DATAFILES HELPER");
     return getIcebergDataFilesToBeAdded(table, tableMetadata, gmce, gmce.getNewFiles(), table.spec(), newSpecsMap,
         IcebergUtils.getSchemaIdMap(getSchemaWithOriginId(gmce), table.schema())).stream()
         .filter(dataFile -> tableMetadata.addedFiles.getIfPresent(dataFile.path()) == null);
@@ -723,6 +735,7 @@ public class IcebergMetadataWriter implements MetadataWriter {
    */
   private Set<DataFile> getIcebergDataFilesToBeAdded(Table table, TableMetadata tableMetadata, GobblinMetadataChangeEvent gmce, List<org.apache.gobblin.metadata.DataFile> files,
       PartitionSpec partitionSpec, Map<String, Collection<HiveSpec>> newSpecsMap, Map<Integer, Integer> schemaIdMap) {
+    log.info("GET ICEBERG DATA FILES TO BE ADDED");
     Set<DataFile> dataFiles = new HashSet<>();
     for (org.apache.gobblin.metadata.DataFile file : files) {
       try {
@@ -759,6 +772,8 @@ public class IcebergMetadataWriter implements MetadataWriter {
     table = addPartitionToIcebergTable(table, newPartitionColumn, newPartitionColumnType);
     PartitionSpec partitionSpec = table.spec();
     int late = !tableMetadata.completenessEnabled ? 0 : isLate(datepartition, tableMetadata.completionWatermark);
+    log.info("LATE");
+    log.info(String.valueOf(late));
     List<String> partitionValues = new ArrayList<>(hivePartition.getValues());
     partitionValues.add(String.valueOf(late));
     return IcebergUtils.getPartition(partitionSpec.partitionType(), partitionValues);
@@ -1043,21 +1058,29 @@ public class IcebergMetadataWriter implements MetadataWriter {
   @Override
   public void writeEnvelope(RecordEnvelope<GenericRecord> recordEnvelope, Map<String, Collection<HiveSpec>> newSpecsMap,
       Map<String, Collection<HiveSpec>> oldSpecsMap, HiveSpec tableSpec) throws IOException {
+    System.out.println("WRITE ENVELOPE");
     Lock readLock = readWriteLock.readLock();
     readLock.lock();
     try {
       GenericRecord genericRecord = recordEnvelope.getRecord();
       GobblinMetadataChangeEvent gmce =
           (GobblinMetadataChangeEvent) SpecificData.get().deepCopy(genericRecord.getSchema(), genericRecord);
+      System.out.println("GMCE");
       String dbName = tableSpec.getTable().getDbName();
       String tableName = tableSpec.getTable().getTableName();
       if (whitelistBlacklist.acceptTable(dbName, tableName)) {
+        System.out.println(dbName);
+        System.out.println(tableName);
+
         TableIdentifier tid = TableIdentifier.of(dbName, tableName);
         String topicPartition = tableTopicPartitionMap.computeIfAbsent(tid,
             t -> recordEnvelope.getWatermark().getSource());
         Long currentWatermark = getAndPersistCurrentWatermark(tid, topicPartition);
         Long currentOffset = ((LongWatermark)recordEnvelope.getWatermark().getWatermark()).getValue();
 
+        System.out.println("HERE");
+        System.out.println(currentOffset);
+        System.out.println(currentWatermark);
         if (currentOffset > currentWatermark) {
           if (!tableMetadataMap.computeIfAbsent(tid, t -> new TableMetadata(this.conf)).lowWatermark.isPresent()) {
             //This means we haven't register this table or met some error before, we need to reset the low watermark

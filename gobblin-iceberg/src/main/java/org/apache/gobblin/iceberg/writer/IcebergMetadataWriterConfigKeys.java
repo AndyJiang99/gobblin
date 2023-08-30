@@ -20,7 +20,7 @@ package org.apache.gobblin.iceberg.writer;
 public class IcebergMetadataWriterConfigKeys {
 
   public static final String ICEBERG_COMPLETENESS_ENABLED = "iceberg.completeness.enabled";
-  public static final boolean DEFAULT_ICEBERG_COMPLETENESS = false;
+  public static final boolean DEFAULT_ICEBERG_COMPLETENESS = true;
   public static final String ICEBERG_TOTAL_COUNT_COMPLETENESS_ENABLED = "iceberg.completeness.totalCount.enabled";
   public static final boolean DEFAULT_ICEBERG_TOTAL_COUNT_COMPLETENESS = false;
   public static final String ICEBERG_COMPLETENESS_WHITELIST = "iceberg.completeness.whitelist";

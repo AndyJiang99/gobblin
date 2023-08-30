@@ -147,6 +147,8 @@ public class GobblinMCEWriterTest {
         any(RecordEnvelope.class), anyMap(), anyMap(), any(HiveSpec.class));
     Mockito.verify(exceptionWriter, never()).writeEnvelope(
         any(RecordEnvelope.class), anyMap(), anyMap(), any(HiveSpec.class));
+    System.out.println("TESTING");
+    Assert.fail();
   }
 
   @Test
@@ -242,6 +244,8 @@ public class GobblinMCEWriterTest {
   private void writeWithMetadataWriters(GobblinMetadataChangeEvent gmce) throws IOException {
     List<MetadataWriter> allowedMetadataWriters = GobblinMCEWriter.getAllowedMetadataWriters(
         gmce, gobblinMCEWriter.getMetadataWriters());
+    System.out.println("GMCE METADATA");
+    System.out.println(gmce.toString());
 
     gobblinMCEWriter.writeWithMetadataWriters(new RecordEnvelope<>(gmce, watermark), allowedMetadataWriters,
         new ConcurrentHashMap(), new ConcurrentHashMap(), mockHiveSpec);

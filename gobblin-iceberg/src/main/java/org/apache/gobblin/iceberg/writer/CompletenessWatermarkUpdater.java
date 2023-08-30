@@ -241,6 +241,7 @@ public class CompletenessWatermarkUpdater {
               this.tableMetadata.table.get().name().toLowerCase(Locale.ROOT)),
           updatedWatermark);
 
+//      log.info("COMPUTE AND UPDATE INTERNAL");
       if (updatedWatermark > this.previousWatermark) {
         log.info(String.format("Updating %s for %s to %s", COMPLETION_WATERMARK_KEY,
             this.tableMetadata.table.get().name(), updatedWatermark));

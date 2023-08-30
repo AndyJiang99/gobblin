@@ -167,6 +167,7 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
     metricContext = Instrumented.getMetricContext(state, this.getClass(), tags);
     eventSubmitter = new EventSubmitter.Builder(metricContext, GOBBLIN_MCE_WRITER_METRIC_NAMESPACE).build();
     for (String className : state.getPropAsList(GMCE_METADATA_WRITER_CLASSES, IcebergMetadataWriter.class.getName())) {
+      System.out.println(className);
       metadataWriters.add(closer.register(GobblinConstructorUtils.invokeConstructor(MetadataWriter.class, className, state)));
       metadataWriterWriteTimers.put(className, metricContext.contextAwareTimer(className + ".write", 1, TimeUnit.HOURS));
       metadataWriterFlushTimers.put(className, metricContext.contextAwareTimer(className + ".flush", 1, TimeUnit.HOURS));
@@ -361,6 +362,11 @@ public class GobblinMCEWriter implements DataWriter<GenericRecord> {
           Timer datasetTimer = datasetTimers.computeIfAbsent(tableName, k -> metricContext.contextAwareTimer(k, 1, TimeUnit.HOURS));
           try (Timer.Context writeContext = writeTimer.time();
               Timer.Context datasetContext = datasetTimer.time()) {
+            System.out.println("WRITER WRITEENVELOPE");
+            GenericRecord genericRecord = recordEnvelope.getRecord();
+            GobblinMetadataChangeEvent gmce =
+                (GobblinMetadataChangeEvent) SpecificData.get().deepCopy(genericRecord.getSchema(), genericRecord);
+            System.out.println(gmce);
             writer.writeEnvelope(recordEnvelope, newSpecsMap, oldSpecsMap, spec);
           }
         } catch (Exception e) {

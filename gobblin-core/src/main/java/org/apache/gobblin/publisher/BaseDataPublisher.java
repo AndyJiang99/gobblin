@@ -761,6 +761,8 @@ public class BaseDataPublisher extends SingleTaskDataPublisher {
     String mergedMd = null;
     MetadataMerger<String> mergerForBranch = metadataMergers.get(new PartitionIdentifier(partitionId, branchId));
     if (mergerForBranch != null) {
+      LOG.info("getMergedMetadataForPartitionAndBranch");
+      LOG.info(mergerForBranch.toString());
       mergedMd = mergerForBranch.getMergedMetadata();
       if (mergedMd == null) {
         LOG.warn("Metadata merger for branch {} returned null - bug in merger?", branchId);

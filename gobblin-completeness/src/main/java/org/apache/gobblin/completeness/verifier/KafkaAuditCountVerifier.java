@@ -74,6 +74,7 @@ public class KafkaAuditCountVerifier {
    * Constructor with user specified audit count client
    */
   public KafkaAuditCountVerifier(State state, AuditCountClient client) {
+    state.setProp(REFERENCE_TIERS, "kafka-corp-lva1-tracking-agg");
     this.auditCountClient = client;
     this.threshold =
         state.getPropAsDouble(THRESHOLD, DEFAULT_THRESHOLD);

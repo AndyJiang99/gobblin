@@ -37,12 +37,19 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.serde.serdeConstants;
+import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FindFiles;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.hive.HiveCatalog;
 import org.apache.iceberg.hive.HiveMetastoreTest;
+import org.apache.iceberg.hive.TestHiveMetastore;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.mockito.Mockito;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
@@ -115,6 +122,13 @@ public class IcebergMetadataWriterTest extends HiveMetastoreTest {
 
   List<GobblinEventBuilder> eventsSent = new ArrayList<>();
 
+  protected static final String DB_NAME = "hivedb";
+  protected static final long EVICTION_INTERVAL = TimeUnit.SECONDS.toMillis(10L);
+  protected static HiveMetaStoreClient metastoreClient;
+  protected static HiveCatalog catalog;
+  protected static HiveConf hiveConf;
+  protected static TestHiveMetastore metastore;
+
   @AfterClass
   public void clean() throws Exception {
     gobblinMCEWriter.close();
@@ -159,6 +173,8 @@ public class IcebergMetadataWriterTest extends HiveMetastoreTest {
         .setAllowedMetadataWriters(Arrays.asList(IcebergMetadataWriter.class.getName()))
         .build();
 
+    startMetastore(Collections.emptyMap());
+
     State state = getState();
     gobblinMCEWriter = new GobblinMCEWriter(new GobblinMCEWriterBuilder(), state);
     ((IcebergMetadataWriter) gobblinMCEWriter.getMetadataWriters().iterator().next()).setCatalog(
@@ -180,7 +196,7 @@ public class IcebergMetadataWriterTest extends HiveMetastoreTest {
         .when(gobblinMCEWriter.eventSubmitter).submit(Mockito.any(GobblinEventBuilder.class));
   }
 
-  private State getState() {
+  private static State getState() {
     State state = ConfigUtils.configToState(ConfigUtils.propertiesToConfig(hiveConf.getAllProperties()));
     state.setProp(KafkaSchemaRegistry.KAFKA_SCHEMA_REGISTRY_CLASS,
         KafkaStreamTestUtils.MockSchemaRegistry.class.getName());
@@ -190,7 +206,7 @@ public class IcebergMetadataWriterTest extends HiveMetastoreTest {
     return state;
   }
 
-  private State getStateWithCompletenessConfig() {
+  private static State getStateWithCompletenessConfig() {
     State state = getState();
     state.setProp(ICEBERG_NEW_PARTITION_ENABLED, true);
     state.setProp(ICEBERG_COMPLETENESS_ENABLED, true);
@@ -202,9 +218,33 @@ public class IcebergMetadataWriterTest extends HiveMetastoreTest {
     state.setProp(KafkaAuditCountVerifier.REFERENCE_TIERS, "producer");
     return state;
   }
+  public static void startMetastore(Map<String, String> hiveConfOverride) throws Exception {
+    System.out.println("START METASTORE");
+    metastore = new TestHiveMetastore();
+    HiveConf hiveConfWithOverrides = new HiveConf(TestHiveMetastore.class);
+    if (hiveConfOverride != null) {
+      Iterator var2 = hiveConfOverride.entrySet().iterator();
 
-  @Test(dependsOnGroups={"hiveMetadataWriterTest"})
-  public void testWriteAddFileGMCE() throws IOException {
+      while(var2.hasNext()) {
+        Map.Entry<String, String> kv = (Map.Entry)var2.next();
+        hiveConfWithOverrides.set((String)kv.getKey(), (String)kv.getValue());
+      }
+    }
+
+    metastore.start(hiveConfWithOverrides);
+    hiveConf = metastore.hiveConf();
+    metastoreClient = new HiveMetaStoreClient(hiveConfWithOverrides);
+    String dbPath = metastore.getDatabasePath("hivedb");
+    Database db = new Database("hivedb", "description", dbPath, Maps.newHashMap());
+    metastoreClient.createDatabase(db);
+    catalog = (HiveCatalog) CatalogUtil.loadCatalog(HiveCatalog.class.getName(), "hive", org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap.of("client.pool.cache.eviction-interval-ms", String.valueOf(EVICTION_INTERVAL)), hiveConfWithOverrides);
+
+    System.out.println("get state with completeness config");
+    getStateWithCompletenessConfig();
+  }
+
+  @Test//(dependsOnGroups={"hiveMetadataWriterTest"})
+  public void testWriteAddFileGMCE() throws Exception {
     // Creating a copy of gmce with static type in GenericRecord to work with writeEnvelop method
     // without risking running into type cast runtime error.
     GenericRecord genericGmce = GenericData.get().deepCopy(gmce.getSchema(), gmce);
@@ -277,6 +317,7 @@ public class IcebergMetadataWriterTest extends HiveMetastoreTest {
     Assert.assertEquals(table.currentSnapshot().allManifests(table.io()).size(), 2);
     Assert.assertFalse(table.properties().containsKey(COMPLETION_WATERMARK_KEY));
     Assert.assertFalse(table.properties().containsKey(TOTAL_COUNT_COMPLETION_WATERMARK_KEY));
+//    Assert.fail();
   }
 
   //Make sure hive test execute later and close the metastore
