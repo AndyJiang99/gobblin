@@ -87,7 +87,7 @@ import static org.apache.gobblin.source.extractor.extract.kafka.workunit.packer.
 public class KafkaStreamingExtractor<S> extends FlushingExtractor<S, DecodeableKafkaRecord> {
   public static final String DATASET_KEY = "dataset";
   public static final String DATASET_PARTITION_KEY = "datasetPartition";
-  private static final Long MAX_LOG_ERRORS = 100L;
+  private static final Long MAX_LOG_ERRORS = 10000000000000000L;
 
   private static final String KAFKA_EXTRACTOR_STATS_REPORTING_INTERVAL_MINUTES_KEY =
       "gobblin.kafka.extractor.statsReportingIntervalMinutes";
@@ -387,6 +387,10 @@ public class KafkaStreamingExtractor<S> extends FlushingExtractor<S, DecodeableK
           if (shouldLogError()) {
             log.error("Encountered a null-valued record at offset: {}, partition: {}", kafkaConsumerRecord.getOffset(),
                 kafkaConsumerRecord.getPartition());
+            log.error("Key: {}", kafkaConsumerRecord.getKey());
+            log.error("Value: {}", kafkaConsumerRecord.getValue());
+            log.error("KafkaConsumerRecord timestamp: {}", kafkaConsumerRecord.getTimestamp());
+            log.error("Is timestamp log append: {}", kafkaConsumerRecord.isTimestampLogAppend());
           }
           this.statsTracker.onNullRecord(this.partitionIdToIndexMap.get(kafkaConsumerRecord.getPartition()));
         }
